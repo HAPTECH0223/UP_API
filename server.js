@@ -42,23 +42,37 @@ async function initializeDatabase() {
         key VARCHAR(255) UNIQUE NOT NULL,
         status VARCHAR(20) DEFAULT 'active',
         created TIMESTAMPTZ DEFAULT NOW(),
-        last_used TIMESTAMPTZ
+        last_used TIMESTAMPTZ,
+        expires_at TIMESTAMPTZ,
+        auto_disabled BOOLEAN DEFAULT FALSE
       )
+    `);
+
+    // Add expires_at column if it doesn't exist (for existing databases)
+    await pool.query(`
+      ALTER TABLE api_keys 
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS auto_disabled BOOLEAN DEFAULT FALSE
     `);
 
     // Check if we have any keys, if not, add the default one
     const result = await pool.query('SELECT COUNT(*) FROM api_keys');
     if (parseInt(result.rows[0].count) === 0) {
       console.log('Adding default API key to database...');
+      // Default key expires in 1 year
+      const defaultExpiry = new Date();
+      defaultExpiry.setFullYear(defaultExpiry.getFullYear() + 1);
+      
       await pool.query(`
-        INSERT INTO api_keys (name, description, environment, key, status)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO api_keys (name, description, environment, key, status, expires_at)
+        VALUES ($1, $2, $3, $4, $5, $6)
       `, [
         'Default Key',
         'Original environment variable key',
         'production',
         API_KEY,
-        'active'
+        'active',
+        defaultExpiry
       ]);
     }
 
@@ -81,11 +95,37 @@ function readDatabase() {
 
 async function getActiveApiKeys() {
   try {
+    // First, auto-disable expired keys
+    await autoDisableExpiredKeys();
+    
     const result = await pool.query('SELECT key FROM api_keys WHERE status = $1', ['active']);
     return result.rows.map(row => row.key);
   } catch (error) {
     console.error('Error getting active API keys:', error);
     return [];
+  }
+}
+
+async function autoDisableExpiredKeys() {
+  try {
+    const result = await pool.query(`
+      UPDATE api_keys 
+      SET status = 'inactive', auto_disabled = TRUE
+      WHERE status = 'active' 
+      AND expires_at IS NOT NULL 
+      AND expires_at <= NOW()
+      RETURNING name, key
+    `);
+    
+    if (result.rows.length > 0) {
+      console.log(`Auto-disabled ${result.rows.length} expired API keys:`, 
+        result.rows.map(r => r.name).join(', '));
+    }
+    
+    return result.rows.length;
+  } catch (error) {
+    console.error('Error auto-disabling expired keys:', error);
+    return 0;
   }
 }
 
@@ -139,8 +179,11 @@ function cleanupExpiredSessions() {
   }
 }
 
-// Cleanup expired sessions every hour
-setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+// Cleanup expired sessions every hour and check for expired keys
+setInterval(() => {
+  cleanupExpiredSessions();
+  autoDisableExpiredKeys();
+}, 60 * 60 * 1000); // Every hour
 
 // ——— Authentication Middleware ———
 const adminAuthMiddleware = (req, res, next) => {
@@ -284,8 +327,11 @@ app.get('/admin/verify', adminAuthMiddleware, (req, res) => {
 // Get all API keys (protected)
 app.get('/admin/keys', adminAuthMiddleware, async (req, res) => {
   try {
+    // Auto-disable expired keys before fetching
+    await autoDisableExpiredKeys();
+    
     const result = await pool.query(`
-      SELECT id, name, description, environment, key, status, created, last_used
+      SELECT id, name, description, environment, key, status, created, last_used, expires_at, auto_disabled
       FROM api_keys 
       ORDER BY created DESC
     `);
@@ -298,23 +344,44 @@ app.get('/admin/keys', adminAuthMiddleware, async (req, res) => {
 
 // Add new API key (protected)
 app.post('/admin/keys', adminAuthMiddleware, async (req, res) => {
-  const { name, description, environment, key } = req.body;
+  const { name, description, environment, key, expirationPeriod } = req.body;
   
   if (!name || !key) {
     return res.status(400).json({ error: 'Name and key are required' });
   }
 
+  if (!expirationPeriod) {
+    return res.status(400).json({ error: 'Expiration period is required' });
+  }
+
+  // Calculate expiration date
+  const expiresAt = new Date();
+  switch (expirationPeriod) {
+    case 'day':
+      expiresAt.setDate(expiresAt.getDate() + 1);
+      break;
+    case 'week':
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      break;
+    case 'month':
+      expiresAt.setMonth(expiresAt.getMonth() + 1);
+      break;
+    default:
+      return res.status(400).json({ error: 'Invalid expiration period. Use: day, week, or month' });
+  }
+
   try {
     const result = await pool.query(`
-      INSERT INTO api_keys (name, description, environment, key, status)
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO api_keys (name, description, environment, key, status, expires_at)
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `, [
       name,
       description || '',
       environment || 'production',
       key,
-      'active'
+      'active',
+      expiresAt
     ]);
 
     res.status(201).json(result.rows[0]);
