@@ -650,11 +650,11 @@
         // API Keys storage - loaded from server
         let apiKeys = [];
 
-        // Check if already logged in (session storage)
+        // Check if already logged in (local storage)
         async function checkAuth() {
             console.log('=== AUTH CHECK DEBUG ===');
-            const token = sessionStorage.getItem('admin_token');
-            const expiry = sessionStorage.getItem('admin_expiry');
+            const token = localStorage.getItem('admin_token');
+            const expiry = localStorage.getItem('admin_expiry');
             
             console.log('Stored token:', token ? token.substring(0, 10) + '...' : 'none');
             console.log('Stored expiry:', expiry);
@@ -664,8 +664,8 @@
             if (!token || !expiry || new Date().getTime() >= parseInt(expiry)) {
                 console.log('❌ No valid local session found');
                 // Clear expired session
-                sessionStorage.removeItem('admin_token');
-                sessionStorage.removeItem('admin_expiry');
+                localStorage.removeItem('admin_token');
+                localStorage.removeItem('admin_expiry');
                 return false;
             }
             
@@ -693,8 +693,8 @@
                 } else {
                     console.log('❌ Server verification failed');
                     // Invalid token, clear session
-                    sessionStorage.removeItem('admin_token');
-                    sessionStorage.removeItem('admin_expiry');
+                    localStorage.removeItem('admin_token');
+                    localStorage.removeItem('admin_expiry');
                     return false;
                 }
             } catch (error) {
@@ -717,10 +717,10 @@
                 const data = await response.json();
                 
                 if (response.ok) {
-                    // Store session
+                    // Store session in localStorage
                     const expiry = new Date().getTime() + data.expiresIn;
-                    sessionStorage.setItem('admin_token', data.token);
-                    sessionStorage.setItem('admin_expiry', expiry.toString());
+                    localStorage.setItem('admin_token', data.token);
+                    localStorage.setItem('admin_expiry', expiry.toString());
                     
                     isAuthenticated = true;
                     sessionToken = data.token;
@@ -749,8 +749,8 @@
                 console.error('Logout error:', error);
             }
             
-            sessionStorage.removeItem('admin_token');
-            sessionStorage.removeItem('admin_expiry');
+            localStorage.removeItem('admin_token');
+            localStorage.removeItem('admin_expiry');
             isAuthenticated = false;
             sessionToken = null;
             showLogin();
