@@ -26,12 +26,19 @@ const apiKeyMiddleware = (req, res, next) => {
 
 // ——— Rate limiter setup ———
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,  // 15 minutes
-  max: 100,
+  windowMs: 15 * 60 * 1000,    // 15 minutes
+  max: 100,                    // limit each key to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' }
+  message: { error: 'Too many requests, please try again later.' },
+
+  // HERE: use the API key as the identifier
+  keyGenerator: (req /*, res*/) => {
+    // Pull from header or query-param, just like your auth middleware
+    return req.header('x-api-key') || req.query.api_key || req.ip;
+  }
 });
+
 
 // ——— Apply middleware ———
 app.use(apiKeyMiddleware);
