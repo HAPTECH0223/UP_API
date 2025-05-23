@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>API Key Management Dashboard</title>
+    <title>API Admin - Login</title>
     <style>
         * {
             margin: 0;
@@ -15,10 +15,146 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             padding: 20px;
         }
 
+        /* Login Screen Styles */
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 60px 50px;
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            transform: translateY(-10px);
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(-10px);
+            }
+        }
+
+        .login-header {
+            margin-bottom: 40px;
+        }
+
+        .login-header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+
+        .login-header p {
+            color: #64748b;
+            font-size: 1.1rem;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .form-group {
+            position: relative;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 18px 24px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            background: #f8fafc;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .form-group label {
+            position: absolute;
+            left: 24px;
+            top: 18px;
+            color: #64748b;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            pointer-events: none;
+        }
+
+        .form-group input:focus + label,
+        .form-group input:not(:placeholder-shown) + label {
+            top: -8px;
+            left: 20px;
+            font-size: 0.85rem;
+            color: #667eea;
+            background: white;
+            padding: 0 8px;
+        }
+
+        .login-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 18px 24px;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .login-btn:active {
+            transform: translateY(0);
+        }
+
+        .login-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error-message {
+            background: #fee2e2;
+            color: #991b1b;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            margin-top: 15px;
+            border: 1px solid #fecaca;
+            display: none;
+        }
+
+        /* Dashboard Styles (same as before) */
         .dashboard {
+            display: none;
             max-width: 1200px;
             margin: 0 auto;
             background: rgba(255, 255, 255, 0.95);
@@ -59,6 +195,24 @@
             display: flex;
             align-items: center;
             gap: 8px;
+        }
+
+        .logout-btn {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .refresh-dot {
@@ -141,31 +295,39 @@
             align-items: end;
         }
 
-        .form-group {
+        .form-group-dashboard {
             flex: 1;
             min-width: 200px;
         }
 
-        .form-group label {
+        .form-group-dashboard label {
             display: block;
             margin-bottom: 5px;
             font-weight: 600;
             color: #374151;
+            position: static;
+            background: none;
+            padding: 0;
+            top: auto;
+            left: auto;
+            font-size: 1rem;
         }
 
-        .form-group input, .form-group select {
+        .form-group-dashboard input, .form-group-dashboard select {
             width: 100%;
             padding: 12px;
             border: 2px solid #d1d5db;
             border-radius: 8px;
             font-size: 1rem;
             transition: border-color 0.3s ease;
+            background: white;
         }
 
-        .form-group input:focus, .form-group select:focus {
+        .form-group-dashboard input:focus, .form-group-dashboard select:focus {
             outline: none;
             border-color: #3b82f6;
             box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            transform: none;
         }
 
         .btn {
@@ -336,6 +498,10 @@
         }
 
         @media (max-width: 768px) {
+            .login-container {
+                padding: 40px 30px;
+            }
+            
             .key-form {
                 flex-direction: column;
             }
@@ -374,8 +540,34 @@
     </style>
 </head>
 <body>
-    <div class="dashboard">
+    <!-- Login Screen -->
+    <div class="login-container" id="login-screen">
+        <div class="login-header">
+            <h1>🔐 Admin Login</h1>
+            <p>Enter your credentials to access the API management dashboard</p>
+        </div>
+        <form class="login-form" id="login-form">
+            <div class="form-group">
+                <input type="text" id="username" placeholder=" " required>
+                <label for="username">Username</label>
+            </div>
+            <div class="form-group">
+                <input type="password" id="password" placeholder=" " required>
+                <label for="password">Password</label>
+            </div>
+            <button type="submit" class="login-btn" id="login-btn">
+                🚀 Access Dashboard
+            </button>
+            <div class="error-message" id="error-message">
+                Invalid credentials. Please try again.
+            </div>
+        </form>
+    </div>
+
+    <!-- Main Dashboard (hidden initially) -->
+    <div class="dashboard" id="main-dashboard">
         <div class="header">
+            <button class="logout-btn" onclick="logout()">🚪 Logout</button>
             <h1>🔐 API Key Management</h1>
             <p>Manage and monitor your API keys with real-time status tracking</p>
             <div class="refresh-indicator">
@@ -407,22 +599,22 @@
             <div class="add-key-section">
                 <h3>🚀 Add New API Key</h3>
                 <div class="key-form">
-                    <div class="form-group">
+                    <div class="form-group-dashboard">
                         <label for="key-name">Key Name</label>
                         <input type="text" id="key-name" placeholder="e.g., Production App, Mobile Client">
                     </div>
-                    <div class="form-group">
+                    <div class="form-group-dashboard">
                         <label for="key-description">Description</label>
                         <input type="text" id="key-description" placeholder="Brief description of key usage">
                     </div>
-                    <div class="form-group" id="generated-key-group" style="display: none;">
+                    <div class="form-group-dashboard" id="generated-key-group" style="display: none;">
                         <label for="generated-key">Generated API Key</label>
                         <div style="display: flex; gap: 10px;">
                             <input type="text" id="generated-key" readonly style="background: #f8fafc; font-family: Monaco, monospace; font-weight: bold;">
                             <button type="button" class="btn btn-generate" onclick="copyGeneratedKey()" style="white-space: nowrap;">📋 Copy</button>
                         </div>
                     </div>
-                    <div class="form-group">
+                    <div class="form-group-dashboard">
                         <label for="key-environment">Environment</label>
                         <select id="key-environment">
                             <option value="production">Production</option>
@@ -451,11 +643,110 @@
     <div class="notification" id="notification"></div>
 
     <script>
+        // Authentication state
+        let isAuthenticated = false;
+        let sessionToken = null;
+
         // API Keys storage - loaded from server
         let apiKeys = [];
 
+        // Check if already logged in (session storage)
+        function checkAuth() {
+            const token = sessionStorage.getItem('admin_token');
+            const expiry = sessionStorage.getItem('admin_expiry');
+            
+            if (token && expiry && new Date().getTime() < parseInt(expiry)) {
+                isAuthenticated = true;
+                sessionToken = token;
+                showDashboard();
+                loadApiKeys();
+                startAutoRefresh();
+                return true;
+            }
+            
+            // Clear expired session
+            sessionStorage.removeItem('admin_token');
+            sessionStorage.removeItem('admin_expiry');
+            return false;
+        }
+
+        // Login function
+        async function login(username, password) {
+            // Simple authentication - in production, this should be server-side
+            // For now, using a basic hardcoded check
+            if (username === 'admin' && password === 'password') {
+                // Generate session token (in production, this comes from server)
+                const token = btoa(username + ':' + Date.now());
+                const expiry = new Date().getTime() + (24 * 60 * 60 * 1000); // 24 hours
+                
+                sessionStorage.setItem('admin_token', token);
+                sessionStorage.setItem('admin_expiry', expiry.toString());
+                
+                isAuthenticated = true;
+                sessionToken = token;
+                return true;
+            }
+            return false;
+        }
+
+        // Logout function
+        function logout() {
+            sessionStorage.removeItem('admin_token');
+            sessionStorage.removeItem('admin_expiry');
+            isAuthenticated = false;
+            sessionToken = null;
+            showLogin();
+        }
+
+        // UI functions
+        function showLogin() {
+            document.getElementById('login-screen').style.display = 'block';
+            document.getElementById('main-dashboard').style.display = 'none';
+            document.body.style.display = 'flex';
+        }
+
+        function showDashboard() {
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('main-dashboard').style.display = 'block';
+            document.body.style.display = 'block';
+        }
+
+        // Login form handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('login-btn');
+            const errorMsg = document.getElementById('error-message');
+            
+            // Show loading state
+            loginBtn.disabled = true;
+            loginBtn.textContent = '🔄 Logging in...';
+            errorMsg.style.display = 'none';
+            
+            // Simulate network delay for better UX
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            if (await login(username, password)) {
+                showNotification('✅ Login successful! Welcome to the dashboard.', 'success');
+                showDashboard();
+                loadApiKeys();
+                startAutoRefresh();
+            } else {
+                errorMsg.style.display = 'block';
+                showNotification('❌ Invalid credentials', 'error');
+            }
+            
+            // Reset button
+            loginBtn.disabled = false;
+            loginBtn.textContent = '🚀 Access Dashboard';
+        });
+
         // Load API keys from server
         async function loadApiKeys() {
+            if (!isAuthenticated) return;
+            
             try {
                 const response = await fetch('/admin/keys');
                 if (response.ok) {
@@ -474,7 +765,9 @@
         // Auto-refresh keys every 30 seconds to show updated last_used times
         function startAutoRefresh() {
             setInterval(() => {
-                loadApiKeys();
+                if (isAuthenticated) {
+                    loadApiKeys();
+                }
             }, 30000); // Refresh every 30 seconds
         }
 
@@ -720,9 +1013,10 @@
             }, 3000);
         }
 
-        // Initialize the dashboard
-        loadApiKeys();
-        startAutoRefresh();
+        // Initialize the app
+        if (!checkAuth()) {
+            showLogin();
+        }
     </script>
 </body>
 </html>
