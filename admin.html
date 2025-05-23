@@ -384,6 +384,13 @@
                         <label for="key-description">Description</label>
                         <input type="text" id="key-description" placeholder="Brief description of key usage">
                     </div>
+                    <div class="form-group" id="generated-key-group" style="display: none;">
+                        <label for="generated-key">Generated API Key</label>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" id="generated-key" readonly style="background: #f8fafc; font-family: Monaco, monospace; font-weight: bold;">
+                            <button type="button" class="btn btn-generate" onclick="copyGeneratedKey()" style="white-space: nowrap;">📋 Copy</button>
+                        </div>
+                    </div>
                     <div class="form-group">
                         <label for="key-environment">Environment</label>
                         <select id="key-environment">
@@ -445,9 +452,27 @@
 
         function generateKey() {
             const generatedKey = generateRandomKey();
-            // For demo purposes, we'll show it in the description field
-            document.getElementById('key-description').value = `Generated: ${generatedKey}`;
-            showNotification('🎲 New key generated! Copy it from the description field.', 'success');
+            document.getElementById('generated-key').value = generatedKey;
+            document.getElementById('generated-key-group').style.display = 'block';
+            showNotification('🎲 New key generated! Copy it using the button next to it.', 'success');
+        }
+
+        function copyGeneratedKey() {
+            const keyInput = document.getElementById('generated-key');
+            keyInput.select();
+            keyInput.setSelectionRange(0, 99999); // For mobile devices
+            
+            try {
+                document.execCommand('copy');
+                showNotification('📋 API key copied to clipboard!', 'success');
+            } catch (err) {
+                // Fallback for modern browsers
+                navigator.clipboard.writeText(keyInput.value).then(() => {
+                    showNotification('📋 API key copied to clipboard!', 'success');
+                }).catch(() => {
+                    showNotification('❌ Failed to copy. Please select and copy manually.', 'error');
+                });
+            }
         }
 
         async function addKey() {
