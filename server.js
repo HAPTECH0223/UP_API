@@ -187,16 +187,40 @@ const apiKeyMiddleware = async (req, res, next) => {
 
 // ——— Rate limiter setup ———
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
+  windowMs: 15 * 60 * 1000,    // 15 minutes
+  max: 100,                    // limit each API key to 100 requests per window
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later.' },
+  
+  // Use API key as the rate limit identifier for API endpoints
   keyGenerator: (req) => {
+    // For admin endpoints, use IP address
     if (req.path.startsWith('/admin')) {
-      return req.ip; // Use IP for admin endpoints
+      return `admin_${req.ip}`;
     }
-    return req.header('x-api-key') || req.query.api_key || req.ip;
+    
+    // For API endpoints, use the API key as identifier
+    const apiKey = req.header('x-api-key') || req.query.api_key;
+    if (apiKey) {
+      return `api_${apiKey}`;
+    }
+    
+    // Fallback to IP if no API key (though this should be rejected by middleware)
+    return `fallback_${req.ip}`;
+  },
+  
+  // Skip rate limiting for requests that will be rejected by API key middleware anyway
+  skip: (req) => {
+    // Don't rate limit admin endpoints differently
+    if (req.path.startsWith('/admin')) {
+      return false;
+    }
+    
+    // Don't waste rate limit slots on requests without API keys
+    // (they'll be rejected by apiKeyMiddleware anyway)
+    const apiKey = req.header('x-api-key') || req.query.api_key;
+    return !apiKey;
   }
 });
 
