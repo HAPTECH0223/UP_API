@@ -762,7 +762,7 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
       
       // Scenario 4: SLOW STAIRS - Research-backed threshold (0.001 hPa/s minimum)
       (pressureAnalysis.change_rate_hpa_per_sec > 0.001 && // Much lower threshold per research
-       stepAnalysis.step_frequency > 0.3 && // Very slow but rhythmic
+       stepAnalysis.step_frequency > 0.1 && // Ultra-slow but still rhythmic (was 0.3)
        stepAnalysis.step_frequency < 1.0 && // Below normal walking
        accelAnalysis.variance < 3.0 && // Controlled movement
        hasVerticalMovement) // Some vertical component
@@ -1083,6 +1083,7 @@ function calculateSessionDuration(startTime, endTime) {
   const end = new Date(endTime);
   return (end - start) / (1000 * 60); // Return minutes
 }
+
 // Start server
 const PORT = process.env.PORT || 3000;
 
