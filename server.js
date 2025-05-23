@@ -561,10 +561,22 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
       stepAnalysis.step_frequency < 0.8 && 
       accelAnalysis.vertical_intensity > 0.2 && 
       accelAnalysis.variance > 0.5 && 
-      accelAnalysis.duration_seconds > 60
+      (accelAnalysis.duration_seconds || 0) > 60
     );
     
-    const is_stairs_indoor = !is_stairs_outdoor && (scenario1 || scenario2 || scenario3 || scenario4 || scenario5);
+    console.log(`🔍 Scenario 5 debug: rate=${pressureAnalysis.change_rate_hpa_per_sec}, freq=${stepAnalysis.step_frequency}, vertical=${accelAnalysis.vertical_intensity}, variance=${accelAnalysis.variance}, duration=${accelAnalysis.duration_seconds}`);
+    console.log(`🔍 Scenario 5 result: ${scenario5}`);
+    
+    // Combine all scenarios with explicit OR logic
+    const anyScenarioMatches = (
+      scenario1 === true ||
+      scenario2 === true ||
+      scenario3 === true ||
+      scenario4 === true ||
+      scenario5 === true
+    );
+    
+    const is_stairs_indoor = !is_stairs_outdoor && anyScenarioMatches;
     
     // Generate reason for debugging
     let reason = '';
@@ -858,7 +870,7 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
        stepAnalysis.step_frequency > 0.1 && // Ultra-slow but still rhythmic (was 0.3)
        stepAnalysis.step_frequency < 1.0 && // Below normal walking
        accelAnalysis.variance < 3.0 && // Controlled movement
-       hasVerticalMovement) || // Some vertical component
+       hasVerticalMovement) // Some vertical component
       // Scenario 5: ACCELEROMETER-PRIMARY for ultra-slow indoor stairs (HVAC interference)
       (pressureAnalysis.change_rate_hpa_per_sec < 0.001 && // Minimal pressure due to HVAC
        stepAnalysis.step_frequency > 0.2 && // Ultra-slow but rhythmic steps
