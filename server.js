@@ -593,43 +593,53 @@ function classifyMovementTypeResearchBased(barometer, accelerometer) {
     return 'climbing_stairs';
   }
   
-  // 3. Level walking (step pattern + minimal pressure change)
+  // 3. Level walking (step pattern + minimal pressure change) - RELAXED THRESHOLDS
   if (stepAnalysis.step_frequency > 1.0 && 
       stepAnalysis.step_frequency < 3.0 &&
-      stepAnalysis.step_regularity > 0.3 &&
-      Math.abs(pressureAnalysis.change_rate_hpa_per_sec) < 0.02) {
+      stepAnalysis.step_regularity > 0.2 &&
+      Math.abs(pressureAnalysis.change_rate_hpa_per_sec) < 0.02 &&
+      accelAnalysis.variance < 8.0) { // Much more relaxed variance threshold
     console.log(`🚶 WALKING detected: Clear steps + minimal pressure change`);
     return 'walking';
   }
   
-  // 4. Escalator (steady pressure + low variance + no steps)
+  // 4. Mixed indoor movement (browsing, shopping, mixed walking/standing) - BROADER RANGE
+  if (stepAnalysis.step_frequency > 0.8 && 
+      stepAnalysis.step_frequency < 2.0 &&
+      accelAnalysis.variance > 1.0 && 
+      accelAnalysis.variance < 10.0 &&
+      Math.abs(pressureAnalysis.change_rate_hpa_per_sec) < 0.05) {
+    console.log(`🛍️ INDOOR_BROWSING detected: Mixed walking with stops/turns`);
+    return 'indoor_browsing';
+  }
+  
+  // 5. Escalator (steady pressure + low variance + no steps)
   if (pressureAnalysis.change_rate_hpa_per_sec > 0.02 && 
       pressureAnalysis.change_rate_hpa_per_sec < 0.08 &&
-      accelAnalysis.variance < 0.2 && 
+      accelAnalysis.variance < 0.5 && 
       stepAnalysis.step_frequency < 0.5) {
     console.log(`🛤️ ESCALATOR detected: Steady pressure + low variance + minimal steps`);
     return 'escalator_movement';
   }
   
-  // 5. Stationary (research: variance < 0.1, avg magnitude < 10.2 m/s²)
-  if (accelAnalysis.variance < 0.1 && accelAnalysis.average_magnitude < 10.5) {
+  // 6. Stationary (research: variance < 0.1, avg magnitude < 10.2 m/s²)
+  if (accelAnalysis.variance < 0.3 && accelAnalysis.average_magnitude < 10.5) {
     console.log(`🛑 STATIONARY detected: Low variance + low magnitude`);
     return 'stationary';
   }
   
-  // 6. Vehicle (high variance + high magnitude)
-  if (accelAnalysis.variance > 2.0 && accelAnalysis.average_magnitude > 11.0) {
-    console.log(`🚗 VEHICLE detected: High variance + high magnitude`);
+  // 7. Vehicle (high variance + high magnitude)
+  if (accelAnalysis.variance > 15.0 && accelAnalysis.average_magnitude > 12.0) {
+    console.log(`🚗 VEHICLE detected: Very high variance + high magnitude`);
     return 'vehicle_transport';
   }
   
-  // 7. Mixed indoor movement (browsing, shopping, mixed walking/standing)
-  if (stepAnalysis.step_frequency > 0.2 && 
-      stepAnalysis.step_frequency < 1.5 &&
-      accelAnalysis.variance > 0.1 && 
-      accelAnalysis.variance < 1.0) {
-    console.log(`🛍️ INDOOR_BROWSING detected: Irregular steps + moderate variance`);
-    return 'indoor_browsing';
+  // 8. Active movement (catch broader movement patterns)
+  if (stepAnalysis.step_frequency > 0.5 && 
+      stepAnalysis.step_frequency < 3.0 &&
+      accelAnalysis.variance > 0.5) {
+    console.log(`🏃 ACTIVE_MOVEMENT detected: Moderate steps + movement variance`);
+    return 'active_movement';
   }
   
   // 8. Enhanced unknown classification with detailed reasoning
