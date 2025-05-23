@@ -456,6 +456,170 @@ app.post('/api/v1/buildings/vertical-delay/bulk', (req, res) => {
 
 // Add this endpoint after your existing API routes in server.js
 
+// ——— Building Database & Geofencing ———
+const BUILDING_DATABASE = [
+  {
+    id: "walmart_catasauqua_pa",
+    name: "Walmart Supercenter",
+    address: "1731 MacArthur Rd, Whitehall, PA 18052",
+    bounds: {
+      north: 40.6825,
+      south: 40.6815,
+      east: -75.4945,
+      west: -75.4965
+    },
+    type: "retail",
+    floors: 1
+  },
+  {
+    id: "target_whitehall_pa", 
+    name: "Target",
+    address: "1405 MacArthur Rd, Whitehall, PA 18052",
+    bounds: {
+      north: 40.6835,
+      south: 40.6825,
+      east: -75.4935,
+      west: -75.4955
+    },
+    type: "retail",
+    floors: 1
+  },
+  {
+    id: "123_main_st_nyc",
+    name: "Manhattan Office Tower",
+    address: "123 Main St, New York, NY 10001",
+    bounds: {
+      north: 40.7590,
+      south: 40.7580,
+      east: -73.9850,
+      west: -73.9860
+    },
+    type: "office",
+    floors: 25
+  },
+  {
+    id: "456_park_ave_nyc",
+    name: "Park Avenue Plaza",
+    address: "456 Park Ave, New York, NY 10016", 
+    bounds: {
+      north: 40.7640,
+      south: 40.7630,
+      east: -73.9720,
+      west: -73.9730
+    },
+    type: "office",
+    floors: 30
+  }
+];
+
+// Advanced building detection with confidence scoring
+function findBuildingFromGPS(lat, lon) {
+  let bestMatch = null;
+  let bestConfidence = 0;
+  
+  for (const building of BUILDING_DATABASE) {
+    // Check if point is within building bounds
+    if (lat >= building.bounds.south && lat <= building.bounds.north &&
+        lon >= building.bounds.west && lon <= building.bounds.east) {
+      
+      // Calculate confidence based on distance from center
+      const centerLat = (building.bounds.north + building.bounds.south) / 2;
+      const centerLon = (building.bounds.east + building.bounds.west) / 2;
+      const distance = Math.sqrt(Math.pow(lat - centerLat, 2) + Math.pow(lon - centerLon, 2));
+      
+      // Closer to center = higher confidence
+      const maxDistance = Math.sqrt(
+        Math.pow(building.bounds.north - building.bounds.south, 2) + 
+        Math.pow(building.bounds.east - building.bounds.west, 2)
+      ) / 2;
+      
+      const confidence = Math.max(0, 1 - (distance / maxDistance));
+      
+      if (confidence > bestConfidence) {
+        bestMatch = building;
+        bestConfidence = confidence;
+      }
+    }
+  }
+  
+  return {
+    building: bestMatch,
+    confidence: bestConfidence,
+    coordinates: { lat, lon }
+  };
+}
+
+// Enhanced building ID extraction with multiple GPS points analysis
+async function extractBuildingId(gpsData) {
+  if (!gpsData || gpsData.length === 0) {
+    return {
+      building_id: 'no_gps_data',
+      confidence: 0,
+      method: 'no_data',
+      coordinates: null
+    };
+  }
+  
+  // Analyze all GPS points for consistency
+  const buildingMatches = gpsData.map(point => {
+    return findBuildingFromGPS(point.lat, point.lon);
+  });
+  
+  // Filter out non-matches and calculate consensus
+  const validMatches = buildingMatches.filter(match => match.building !== null);
+  
+  if (validMatches.length === 0) {
+    // No building matches - create location-based ID
+    const avgLat = gpsData.reduce((sum, p) => sum + p.lat, 0) / gpsData.length;
+    const avgLon = gpsData.reduce((sum, p) => sum + p.lon, 0) / gpsData.length;
+    
+    return {
+      building_id: `unknown_${avgLat.toFixed(4)}_${avgLon.toFixed(4)}`,
+      confidence: 0.1,
+      method: 'coordinate_fallback',
+      coordinates: { lat: avgLat, lon: avgLon }
+    };
+  }
+  
+  // Find most common building match
+  const buildingCounts = {};
+  validMatches.forEach(match => {
+    const id = match.building.id;
+    if (!buildingCounts[id]) {
+      buildingCounts[id] = { count: 0, totalConfidence: 0, building: match.building };
+    }
+    buildingCounts[id].count++;
+    buildingCounts[id].totalConfidence += match.confidence;
+  });
+  
+  // Get building with highest consensus
+  let bestBuilding = null;
+  let bestScore = 0;
+  
+  for (const [buildingId, data] of Object.entries(buildingCounts)) {
+    const consensusRatio = data.count / gpsData.length;
+    const avgConfidence = data.totalConfidence / data.count;
+    const score = consensusRatio * avgConfidence;
+    
+    if (score > bestScore) {
+      bestScore = score;
+      bestBuilding = data;
+    }
+  }
+  
+  return {
+    building_id: bestBuilding.building.id,
+    building_name: bestBuilding.building.name,
+    building_address: bestBuilding.building.address,
+    building_type: bestBuilding.building.type,
+    building_floors: bestBuilding.building.floors,
+    confidence: bestScore,
+    method: 'gps_consensus',
+    gps_points_analyzed: gpsData.length,
+    gps_points_matched: validMatches.length
+  };
+}
+
 // ——— Sensor Data Analysis ———
 function analyzeVerticalMovement(sensorData) {
   const barometer = sensorData.barometer || [];
@@ -654,6 +818,8 @@ function calculateSessionDuration(startTime, endTime) {
   const end = new Date(endTime);
   return (end - start) / (1000 * 60); // Return minutes
 }
+
+// ——— Sensor Data Upload Endpoint ———
 app.post('/api/v1/sensor-data', async (req, res) => {
   try {
     const sensorData = req.body;
@@ -669,15 +835,6 @@ app.post('/api/v1/sensor-data', async (req, res) => {
     console.log(`📱 Received sensor data from device: ${sensorData.device_id}`);
     console.log(`📊 Session: ${sensorData.session_id}`);
     console.log(`🔢 Data points - Barometer: ${sensorData.sensor_data.barometer?.length || 0}, Accelerometer: ${sensorData.sensor_data.accelerometer?.length || 0}, GPS: ${sensorData.sensor_data.gps?.length || 0}`);
-    
-    // Here you can process the data:
-    // 1. Store raw data in database
-    // 2. Extract building_id from GPS coordinates (geofencing)
-    // 3. Calculate vertical delay metrics
-    // 4. Update building summaries
-    
-    // For now, we'll just store it and send success response
-    // TODO: Add database storage and processing logic
     
     // Enhanced processing with building detection
     const buildingInfo = await extractBuildingId(sensorData.sensor_data.gps);
@@ -731,28 +888,6 @@ app.post('/api/v1/sensor-data', async (req, res) => {
     });
   }
 });
-
-// Helper function to extract building ID from GPS coordinates
-async function extractBuildingId(gpsData) {
-  if (!gpsData || gpsData.length === 0) {
-    return 'unknown_location';
-  }
-  
-  // Get the most recent GPS point
-  const latestGPS = gpsData[gpsData.length - 1];
-  const lat = latestGPS.lat;
-  const lon = latestGPS.lon;
-  
-  // Simple building detection logic (replace with your actual geofencing)
-  // This is just a placeholder - you'll implement proper geofencing
-  if (lat >= 40.7580 && lat <= 40.7590 && lon >= -73.9860 && lon <= -73.9850) {
-    return '123_Main_St_NYC';
-  } else if (lat >= 40.7630 && lat <= 40.7640 && lon >= -73.9730 && lon <= -73.9720) {
-    return '456_Park_Ave_NYC';
-  } else {
-    return `building_${lat.toFixed(4)}_${lon.toFixed(4)}`;
-  }
-}
 
 // Start server
 const PORT = process.env.PORT || 3000;
