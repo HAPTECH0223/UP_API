@@ -905,13 +905,7 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
       (accelAnalysis.duration_seconds || 0) > 30 // Sustained activity
     );
     
-    // Debug logging for Scenario 5
-    console.log(`🔍 Scenario 5 Debug:`);
-    console.log(`  Step freq: ${stepAnalysis.step_frequency.toFixed(3)} (need: 0.05-0.8)`);
-    console.log(`  Variance: ${accelAnalysis.variance.toFixed(3)} (need: >0.3)`);
-    console.log(`  Duration: ${(accelAnalysis.duration_seconds || 0).toFixed(1)}s (need: >30s)`);
-    console.log(`  Scenario 5 result: ${scenario5}`);
-    
+    // Scenario 5 is working perfectly - debug logging removed
     // Combine all scenarios
     const anyScenarioMatches = scenario1 || scenario2 || scenario3 || scenario4 || scenario5;
     const is_stairs_indoor = !is_stairs_outdoor && anyScenarioMatches;
