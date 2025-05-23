@@ -758,7 +758,14 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
       (stepAnalysis.step_frequency > 1.5 && // Higher frequency requirement
        stepAnalysis.step_frequency < 2.2 &&
        accelAnalysis.vertical_intensity > 0.7 && // Much higher vertical
-       accelAnalysis.variance > 5.0) // More energetic than level walking
+       accelAnalysis.variance > 5.0) || // More energetic than level walking
+      
+      // Scenario 4: SLOW STAIRS - High pressure rate + slow deliberate steps
+      (pressureAnalysis.change_rate_hpa_per_sec > 0.002 && // Clear pressure signal
+       stepAnalysis.step_frequency > 0.3 && // Very slow but rhythmic
+       stepAnalysis.step_frequency < 1.0 && // Below normal walking
+       accelAnalysis.variance < 3.0 && // Controlled movement
+       hasVerticalMovement) // Some vertical component
     );
   
   // Generate reason for debugging
