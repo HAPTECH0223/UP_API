@@ -21,7 +21,7 @@
       "name": "Default Key",
       "description": "Original environment variable key",
       "environment": "production",
-      "key": "my-test-key",
+      "key": "a4f0bd3b2c21f07a0d0b6c4e342a1b9c6d8e7f6a5b4c3d2e1f0a9b8c7d6e5f4",
       "status": "active",
       "created": "2025-05-23T12:00:00Z",
       "lastUsed": "2025-05-23T14:00:00Z"
