@@ -704,33 +704,380 @@ function detectVerticalEvents(barometer, accelerometer) {
 function classifyMovementType(accelerometer) {
   if (accelerometer.length < 20) return 'insufficient_data';
   
-  // Calculate movement variance
-  const movementVariance = calculateAccelerometerVariance(accelerometer);
-  const avgMagnitude = calculateAverageAcceleration(accelerometer);
+  // Enhanced movement analysis with multiple metrics
+  const metrics = calculateAdvancedMovementMetrics(accelerometer);
   
-  if (movementVariance < 0.1 && avgMagnitude < 10.5) {
+  // Multi-factor classification
+  if (metrics.is_stationary) {
     return 'stationary';
-  } else if (movementVariance < 0.5) {
-    return 'walking';
-  } else if (movementVariance < 2.0) {
-    return 'active_movement';
+  } else if (metrics.has_walking_pattern) {
+    return metrics.is_stairs ? 'climbing_stairs' : 'walking';
+  } else if (metrics.has_elevator_pattern) {
+    return 'elevator_movement';
+  } else if (metrics.has_vehicle_pattern) {
+    return 'vehicle_transport';
+  } else if (metrics.has_escalator_pattern) {
+    return 'escalator_movement';
   } else {
-    return 'vehicle_or_elevator';
+    return 'unknown_movement';
   }
 }
 
+function calculateAdvancedMovementMetrics(accelerometer) {
+  const magnitudes = accelerometer.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  const variance = calculateVariance(magnitudes);
+  const avgMagnitude = magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+  const stepPattern = detectStepPattern(accelerometer);
+  const smoothness = calculateSmoothness(magnitudes);
+  const verticalComponent = analyzeVerticalComponent(accelerometer);
+  
+  return {
+    variance: variance,
+    average_magnitude: avgMagnitude,
+    smoothness: smoothness,
+    step_frequency: stepPattern.frequency,
+    step_regularity: stepPattern.regularity,
+    vertical_intensity: verticalComponent.intensity,
+    
+    // Classification flags
+    is_stationary: variance < 0.1 && avgMagnitude < 10.2,
+    has_walking_pattern: stepPattern.frequency > 0.5 && stepPattern.frequency < 3.0,
+    has_elevator_pattern: variance < 0.3 && smoothness > 0.7 && verticalComponent.intensity > 0.3,
+    has_vehicle_pattern: variance > 2.0 && smoothness < 0.3,
+    has_escalator_pattern: variance < 0.8 && verticalComponent.intensity > 0.5 && stepPattern.frequency < 0.5,
+    is_stairs: stepPattern.frequency > 0.8 && verticalComponent.intensity > 0.6
+  };
+}
+
+function detectStepPattern(accelerometer) {
+  // Analyze for rhythmic patterns indicating walking/climbing
+  const magnitudes = accelerometer.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  // Simple frequency analysis (looking for 1-3 Hz walking patterns)
+  const peaks = findPeaks(magnitudes);
+  const timespan = (accelerometer[accelerometer.length - 1].timestamp - accelerometer[0].timestamp) / 1000;
+  const frequency = peaks.length / timespan; // Hz
+  
+  // Calculate regularity of peaks
+  if (peaks.length < 2) {
+    return { frequency: 0, regularity: 0 };
+  }
+  
+  const intervals = [];
+  for (let i = 1; i < peaks.length; i++) {
+    intervals.push(peaks[i] - peaks[i-1]);
+  }
+  
+  const avgInterval = intervals.reduce((sum, val) => sum + val, 0) / intervals.length;
+  const intervalVariance = calculateVariance(intervals);
+  const regularity = Math.max(0, 1 - (intervalVariance / (avgInterval * avgInterval)));
+  
+  return {
+    frequency: frequency,
+    regularity: regularity,
+    peak_count: peaks.length
+  };
+}
+
+function analyzeVerticalComponent(accelerometer) {
+  // Analyze the Z-axis (vertical) component patterns
+  const zValues = accelerometer.map(reading => reading.z);
+  const zVariance = calculateVariance(zValues);
+  const zAvg = zValues.reduce((sum, val) => sum + val, 0) / zValues.length;
+  
+  // Detect consistent vertical acceleration patterns
+  const verticalIntensity = zVariance / (Math.abs(zAvg) + 1);
+  
+  return {
+    intensity: verticalIntensity,
+    average_z: zAvg,
+    z_variance: zVariance
+  };
+}
+
+function findPeaks(values) {
+  const peaks = [];
+  const threshold = 0.5; // Minimum peak prominence
+  
+  for (let i = 1; i < values.length - 1; i++) {
+    if (values[i] > values[i-1] && values[i] > values[i+1] && 
+        values[i] > (Math.max(...values) * threshold)) {
+      peaks.push(i);
+    }
+  }
+  
+  return peaks;
+}
+
+// ——— Advanced Elevator Detection System ———
+
 function detectElevatorUsage(barometer, accelerometer) {
+  const elevatorEvents = [];
+  
+  if (barometer.length < 30 || accelerometer.length < 30) {
+    return elevatorEvents; // Need sufficient data for pattern analysis
+  }
+  
+  // Step 1: Find potential elevator periods using pressure changes
+  const pressureCandidates = findPressureChangeEvents(barometer);
+  
+  // Step 2: Analyze accelerometer patterns during those periods
+  for (const candidate of pressureCandidates) {
+    const accelPattern = analyzeAccelerationPattern(accelerometer, candidate);
+    const elevatorSignature = checkElevatorSignature(candidate, accelPattern);
+    
+    if (elevatorSignature.isElevator) {
+      elevatorEvents.push({
+        start_time: candidate.start_time,
+        end_time: candidate.end_time,
+        duration_ms: candidate.duration_ms,
+        floors_traveled: elevatorSignature.floors_traveled,
+        direction: candidate.direction,
+        confidence: elevatorSignature.confidence,
+        acceleration_pattern: accelPattern,
+        pressure_change: candidate.pressure_change,
+        elevator_type: elevatorSignature.elevator_type, // passenger, freight, express
+        wait_time_before: elevatorSignature.wait_time_before,
+        door_events: elevatorSignature.door_events
+      });
+    }
+  }
+  
+  return elevatorEvents;
+}
+
+function findPressureChangeEvents(barometer) {
   const events = [];
+  const PRESSURE_THRESHOLD = 0.2; // hPa - more sensitive than before
+  const MIN_DURATION = 3000; // 3 seconds minimum
+  const MAX_DURATION = 120000; // 2 minutes maximum (handles slow freight elevators)
   
-  // Look for characteristic elevator patterns:
-  // 1. Smooth vertical movement (pressure change)
-  // 2. Low horizontal acceleration variance
-  // 3. Specific acceleration patterns (start/stop)
+  let currentEvent = null;
   
-  // TODO: Implement sophisticated elevator detection
-  // This is a complex pattern recognition problem
+  for (let i = 1; i < barometer.length; i++) {
+    const pressureDiff = barometer[i].pressure_hpa - barometer[i-1].pressure_hpa;
+    const timeDiff = barometer[i].timestamp - barometer[i-1].timestamp;
+    
+    // Detect significant pressure changes
+    if (Math.abs(pressureDiff) > PRESSURE_THRESHOLD && timeDiff < 5000) {
+      if (!currentEvent) {
+        // Start new event
+        currentEvent = {
+          start_time: barometer[i-1].timestamp,
+          start_pressure: barometer[i-1].pressure_hpa,
+          direction: pressureDiff > 0 ? 'up' : 'down',
+          pressure_changes: [pressureDiff],
+          total_pressure_change: pressureDiff
+        };
+      } else {
+        // Continue existing event if direction is consistent
+        const newDirection = pressureDiff > 0 ? 'up' : 'down';
+        if (newDirection === currentEvent.direction || Math.abs(pressureDiff) > 0.5) {
+          currentEvent.end_time = barometer[i].timestamp;
+          currentEvent.end_pressure = barometer[i].pressure_hpa;
+          currentEvent.pressure_changes.push(pressureDiff);
+          currentEvent.total_pressure_change += pressureDiff;
+        }
+      }
+    } else if (currentEvent && timeDiff > 3000) {
+      // End current event if pressure stabilizes
+      currentEvent.end_time = currentEvent.end_time || barometer[i-1].timestamp;
+      currentEvent.duration_ms = currentEvent.end_time - currentEvent.start_time;
+      currentEvent.pressure_change = Math.abs(currentEvent.total_pressure_change);
+      
+      // Only keep events with reasonable duration and pressure change
+      if (currentEvent.duration_ms >= MIN_DURATION && 
+          currentEvent.duration_ms <= MAX_DURATION &&
+          currentEvent.pressure_change > 0.3) {
+        events.push(currentEvent);
+      }
+      currentEvent = null;
+    }
+  }
   
-  return events; // Placeholder for now
+  return events;
+}
+
+function analyzeAccelerationPattern(accelerometer, pressureEvent) {
+  // Get accelerometer data during pressure event
+  const eventAccel = accelerometer.filter(reading => 
+    reading.timestamp >= pressureEvent.start_time && 
+    reading.timestamp <= (pressureEvent.end_time || pressureEvent.start_time + 60000)
+  );
+  
+  if (eventAccel.length < 10) {
+    return { pattern: 'insufficient_data', confidence: 0 };
+  }
+  
+  // Calculate acceleration magnitudes
+  const magnitudes = eventAccel.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  // Analyze pattern characteristics
+  const variance = calculateVariance(magnitudes);
+  const avgMagnitude = magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+  const smoothness = calculateSmoothness(magnitudes);
+  const startEndPattern = analyzeStartEndAcceleration(magnitudes);
+  
+  return {
+    pattern: classifyAccelerationPattern(variance, avgMagnitude, smoothness, startEndPattern),
+    variance: variance,
+    average_magnitude: avgMagnitude,
+    smoothness: smoothness,
+    start_end_pattern: startEndPattern,
+    readings_count: eventAccel.length
+  };
+}
+
+function checkElevatorSignature(pressureEvent, accelPattern) {
+  let confidence = 0;
+  let elevatorType = 'unknown';
+  let floors_traveled = 0;
+  
+  // Pressure-based scoring
+  const pressure_score = calculatePressureScore(pressureEvent);
+  confidence += pressure_score * 0.4;
+  
+  // Acceleration pattern scoring
+  const accel_score = calculateAccelerationScore(accelPattern);
+  confidence += accel_score * 0.6;
+  
+  // Estimate floors traveled (1 floor ≈ 0.12 hPa pressure change)
+  floors_traveled = Math.round(pressureEvent.pressure_change / 0.12);
+  
+  // Classify elevator type based on patterns
+  if (pressureEvent.duration_ms > 60000) {
+    elevatorType = 'freight'; // Very slow
+  } else if (floors_traveled > 10 && pressureEvent.duration_ms < 30000) {
+    elevatorType = 'express'; // Fast, many floors
+  } else if (floors_traveled >= 1) {
+    elevatorType = 'passenger'; // Normal passenger elevator
+  }
+  
+  // Detect waiting and door events
+  const wait_time_before = detectWaitingPeriod(pressureEvent);
+  const door_events = detectDoorEvents(accelPattern);
+  
+  return {
+    isElevator: confidence > 0.65, // Stricter threshold
+    confidence: confidence,
+    floors_traveled: floors_traveled,
+    elevator_type: elevatorType,
+    wait_time_before: wait_time_before,
+    door_events: door_events
+  };
+}
+
+function calculatePressureScore(pressureEvent) {
+  let score = 0;
+  
+  // Pressure change magnitude (more change = more likely elevator)
+  const pressure_magnitude = pressureEvent.pressure_change;
+  if (pressure_magnitude > 0.5) score += 0.3;
+  if (pressure_magnitude > 1.0) score += 0.2;
+  if (pressure_magnitude > 2.0) score += 0.2;
+  
+  // Duration appropriateness (elevators have typical duration ranges)
+  const duration_sec = pressureEvent.duration_ms / 1000;
+  if (duration_sec >= 5 && duration_sec <= 60) score += 0.3;
+  
+  return Math.min(score, 1.0);
+}
+
+function calculateAccelerationScore(accelPattern) {
+  let score = 0;
+  
+  // Low variance suggests smooth elevator movement
+  if (accelPattern.variance < 0.5) score += 0.4;
+  if (accelPattern.variance < 0.2) score += 0.2;
+  
+  // Smoothness indicates controlled mechanical movement
+  if (accelPattern.smoothness > 0.7) score += 0.3;
+  
+  // Start-end acceleration pattern (elevators start/stop smoothly)
+  if (accelPattern.start_end_pattern && accelPattern.start_end_pattern.has_start_stop) {
+    score += 0.3;
+  }
+  
+  return Math.min(score, 1.0);
+}
+
+function calculateSmoothness(magnitudes) {
+  if (magnitudes.length < 3) return 0;
+  
+  // Calculate how smooth the acceleration changes are
+  let smoothness_sum = 0;
+  for (let i = 1; i < magnitudes.length - 1; i++) {
+    const change1 = Math.abs(magnitudes[i] - magnitudes[i-1]);
+    const change2 = Math.abs(magnitudes[i+1] - magnitudes[i]);
+    const smoothness = 1 - Math.abs(change1 - change2) / (change1 + change2 + 0.001);
+    smoothness_sum += smoothness;
+  }
+  
+  return smoothness_sum / (magnitudes.length - 2);
+}
+
+function analyzeStartEndAcceleration(magnitudes) {
+  if (magnitudes.length < 10) return { has_start_stop: false };
+  
+  const start_section = magnitudes.slice(0, Math.min(5, magnitudes.length / 4));
+  const end_section = magnitudes.slice(-Math.min(5, magnitudes.length / 4));
+  const middle_section = magnitudes.slice(
+    Math.floor(magnitudes.length * 0.3), 
+    Math.floor(magnitudes.length * 0.7)
+  );
+  
+  const start_variance = calculateVariance(start_section);
+  const end_variance = calculateVariance(end_section);
+  const middle_variance = calculateVariance(middle_section);
+  
+  // Elevators typically have higher variance at start/end (acceleration/deceleration)
+  const has_start_stop = (start_variance > middle_variance * 1.5) || 
+                        (end_variance > middle_variance * 1.5);
+  
+  return {
+    has_start_stop: has_start_stop,
+    start_variance: start_variance,
+    middle_variance: middle_variance,
+    end_variance: end_variance
+  };
+}
+
+function detectWaitingPeriod(pressureEvent) {
+  // TODO: Analyze accelerometer data before pressure event to detect waiting
+  // This would require looking at stationary periods before elevator movement
+  return 0; // Placeholder
+}
+
+function detectDoorEvents(accelPattern) {
+  // TODO: Detect subtle acceleration spikes that indicate door opening/closing
+  // Elevator doors create small vibrations detectable by accelerometer
+  return []; // Placeholder
+}
+
+function classifyAccelerationPattern(variance, avgMagnitude, smoothness, startEndPattern) {
+  if (variance < 0.2 && smoothness > 0.7) {
+    return 'smooth_vertical'; // Likely elevator
+  } else if (variance > 1.0 && startEndPattern.has_start_stop) {
+    return 'walking_with_stops'; // Likely stairs with rest periods
+  } else if (variance > 0.5 && avgMagnitude > 10.5) {
+    return 'active_movement'; // Walking or climbing stairs
+  } else {
+    return 'stationary_or_minimal'; // Not moving much
+  }
+}
+
+function calculateVariance(values) {
+  if (values.length < 2) return 0;
+  const avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+  const variance = values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / values.length;
+  return variance;
 }
 
 // Helper functions
@@ -888,7 +1235,6 @@ app.post('/api/v1/sensor-data', async (req, res) => {
     });
   }
 });
-
 // Start server
 const PORT = process.env.PORT || 3000;
 
