@@ -33,6 +33,7 @@
             color: white;
             padding: 30px;
             text-align: center;
+            position: relative;
         }
 
         .header h1 {
@@ -45,6 +46,32 @@
         .header p {
             opacity: 0.9;
             font-size: 1.1rem;
+        }
+
+        .refresh-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .refresh-dot {
+            width: 8px;
+            height: 8px;
+            background: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
 
         .stats-grid {
@@ -351,6 +378,10 @@
         <div class="header">
             <h1>🔐 API Key Management</h1>
             <p>Manage and monitor your API keys with real-time status tracking</p>
+            <div class="refresh-indicator">
+                <div class="refresh-dot"></div>
+                Auto-refresh: ON
+            </div>
         </div>
 
         <div class="stats-grid">
@@ -440,6 +471,13 @@
             }
         }
 
+        // Auto-refresh keys every 30 seconds to show updated last_used times
+        function startAutoRefresh() {
+            setInterval(() => {
+                loadApiKeys();
+            }, 30000); // Refresh every 30 seconds
+        }
+
         function generateRandomKey() {
             const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
             const prefix = document.getElementById('key-environment').value;
@@ -479,9 +517,15 @@
             const name = document.getElementById('key-name').value.trim();
             const description = document.getElementById('key-description').value.trim();
             const environment = document.getElementById('key-environment').value;
+            const generatedKey = document.getElementById('generated-key').value;
 
             if (!name) {
                 showNotification('❌ Please enter a key name', 'error');
+                return;
+            }
+
+            if (!generatedKey) {
+                showNotification('❌ Please generate a key first', 'error');
                 return;
             }
 
@@ -489,7 +533,7 @@
                 name: name,
                 description: description || 'No description provided',
                 environment: environment,
-                key: generateRandomKey()
+                key: generatedKey
             };
 
             try {
@@ -508,6 +552,8 @@
                     // Clear form
                     document.getElementById('key-name').value = '';
                     document.getElementById('key-description').value = '';
+                    document.getElementById('generated-key').value = '';
+                    document.getElementById('generated-key-group').style.display = 'none';
                     
                     showNotification('✅ API key added successfully!', 'success');
                 } else {
@@ -576,11 +622,13 @@
             if (!date) return 'Never';
             const now = new Date();
             const diff = now - new Date(date);
-            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor(diff / (1000 * 60));
+            const hours = Math.floor(minutes / 60);
             const days = Math.floor(hours / 24);
             
             if (days > 0) return `${days}d ago`;
             if (hours > 0) return `${hours}h ago`;
+            if (minutes > 0) return `${minutes}m ago`;
             return 'Just now';
         }
 
@@ -670,6 +718,7 @@
 
         // Initialize the dashboard
         loadApiKeys();
+        startAutoRefresh();
     </script>
 </body>
 </html>
