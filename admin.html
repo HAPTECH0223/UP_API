@@ -460,7 +460,6 @@
                 const response = await fetch('/admin/keys');
                 if (response.ok) {
                     apiKeys = await response.json();
-                    console.log('Loaded API keys from server:', apiKeys);
                     renderKeys();
                     updateStats();
                 } else {
@@ -620,19 +619,15 @@
         }
 
         function getRelativeTime(date) {
-            console.log('getRelativeTime input:', date, 'type:', typeof date);
             if (!date) return 'Never';
             
             const now = new Date();
             const dateObj = new Date(date);
-            console.log('Parsed date:', dateObj, 'isValid:', !isNaN(dateObj.getTime()));
             
             const diff = now - dateObj;
             const minutes = Math.floor(diff / (1000 * 60));
             const hours = Math.floor(minutes / 60);
             const days = Math.floor(hours / 24);
-            
-            console.log('Time diff:', { diff, minutes, hours, days });
             
             if (isNaN(dateObj.getTime())) return 'Invalid Date';
             if (days > 0) return `${days}d ago`;
@@ -676,7 +671,7 @@
                             </div>
                             <div class="key-info-item">
                                 <span class="key-info-label">Last Used:</span>
-                                <span class="key-info-value">${getRelativeTime(key.lastUsed)}</span>
+                                <span class="key-info-value">${getRelativeTime(key.last_used)}</span>
                             </div>
                             <div class="key-info-item">
                                 <span class="key-info-label">Description:</span>
@@ -704,8 +699,8 @@
             
             // Find most recent activity
             const lastActivity = apiKeys
-                .filter(k => k.lastUsed)
-                .map(k => new Date(k.lastUsed))
+                .filter(k => k.last_used)
+                .map(k => new Date(k.last_used))
                 .sort((a, b) => b - a)[0];
 
             document.getElementById('total-keys').textContent = total;
