@@ -1,7 +1,10 @@
 // server.js
 const express = require('express');
 const cors    = require('cors');
-const data    = require('./db.json').verticalDelay; // array from your db.json
+
+// Use an env var for the data file, falling back to db.json
+const DATA_FILE = process.env.DB_FILE || 'db.json';
+const data      = require(`./${DATA_FILE}`).verticalDelay;
 
 const app = express();
 app.use(cors());
@@ -21,8 +24,8 @@ app.post('/api/v1/buildings/vertical-delay/bulk', (req, res) => {
   res.json(results);
 });
 
-// Start the stub server
-const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Mock API listening on http://localhost:${PORT}`);
+// Listen on the port Render (or any host) gives you
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Mock API listening on http://0.0.0.0:${PORT}`);
 });
