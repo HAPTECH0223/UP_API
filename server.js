@@ -456,7 +456,204 @@ app.post('/api/v1/buildings/vertical-delay/bulk', (req, res) => {
 
 // Add this endpoint after your existing API routes in server.js
 
-// ——— Sensor Data Upload Endpoint ———
+// ——— Sensor Data Analysis ———
+function analyzeVerticalMovement(sensorData) {
+  const barometer = sensorData.barometer || [];
+  const accelerometer = sensorData.accelerometer || [];
+  const gps = sensorData.gps || [];
+  
+  // Basic data quality assessment
+  const dataQuality = {
+    barometer_points: barometer.length,
+    accelerometer_points: accelerometer.length,
+    gps_points: gps.length,
+    duration_covered: calculateDataDuration(barometer, accelerometer),
+    sampling_consistency: assessSamplingConsistency(barometer, accelerometer)
+  };
+  
+  // Analyze vertical movement patterns
+  const verticalEvents = detectVerticalEvents(barometer, accelerometer);
+  const movementClassification = classifyMovementType(accelerometer);
+  const elevatorEvents = detectElevatorUsage(barometer, accelerometer);
+  
+  return {
+    data_quality: dataQuality,
+    movement_classification: movementClassification,
+    vertical_events: verticalEvents,
+    elevator_events: elevatorEvents,
+    summary: {
+      total_vertical_distance: calculateVerticalDistance(barometer),
+      average_movement_intensity: calculateMovementIntensity(accelerometer),
+      time_in_vertical_motion: calculateVerticalMotionTime(verticalEvents)
+    }
+  };
+}
+
+function detectVerticalEvents(barometer, accelerometer) {
+  const events = [];
+  
+  if (barometer.length < 10) return events; // Need minimum data
+  
+  // Analyze pressure changes (1 hPa ≈ 8.4 meters altitude change)
+  const pressureThreshold = 0.5; // hPa - significant pressure change
+  const timeThreshold = 5000; // 5 seconds minimum duration
+  
+  let currentEvent = null;
+  
+  for (let i = 1; i < barometer.length; i++) {
+    const pressureDiff = barometer[i].pressure_hpa - barometer[i-1].pressure_hpa;
+    const timeDiff = barometer[i].timestamp - barometer[i-1].timestamp;
+    
+    if (Math.abs(pressureDiff) > pressureThreshold && timeDiff < 30000) { // Within 30 seconds
+      if (!currentEvent) {
+        currentEvent = {
+          start_time: barometer[i-1].timestamp,
+          start_pressure: barometer[i-1].pressure_hpa,
+          direction: pressureDiff > 0 ? 'up' : 'down',
+          max_pressure_change: Math.abs(pressureDiff)
+        };
+      } else {
+        // Extend current event
+        currentEvent.end_time = barometer[i].timestamp;
+        currentEvent.end_pressure = barometer[i].pressure_hpa;
+        currentEvent.max_pressure_change = Math.max(
+          currentEvent.max_pressure_change, 
+          Math.abs(pressureDiff)
+        );
+      }
+    } else if (currentEvent && timeDiff > timeThreshold) {
+      // End current event
+      currentEvent.end_time = currentEvent.end_time || barometer[i-1].timestamp;
+      currentEvent.duration_ms = currentEvent.end_time - currentEvent.start_time;
+      currentEvent.estimated_floors = Math.round(currentEvent.max_pressure_change / 0.12); // ~0.12 hPa per floor
+      
+      if (currentEvent.duration_ms >= timeThreshold) {
+        events.push(currentEvent);
+      }
+      currentEvent = null;
+    }
+  }
+  
+  return events;
+}
+
+function classifyMovementType(accelerometer) {
+  if (accelerometer.length < 20) return 'insufficient_data';
+  
+  // Calculate movement variance
+  const movementVariance = calculateAccelerometerVariance(accelerometer);
+  const avgMagnitude = calculateAverageAcceleration(accelerometer);
+  
+  if (movementVariance < 0.1 && avgMagnitude < 10.5) {
+    return 'stationary';
+  } else if (movementVariance < 0.5) {
+    return 'walking';
+  } else if (movementVariance < 2.0) {
+    return 'active_movement';
+  } else {
+    return 'vehicle_or_elevator';
+  }
+}
+
+function detectElevatorUsage(barometer, accelerometer) {
+  const events = [];
+  
+  // Look for characteristic elevator patterns:
+  // 1. Smooth vertical movement (pressure change)
+  // 2. Low horizontal acceleration variance
+  // 3. Specific acceleration patterns (start/stop)
+  
+  // TODO: Implement sophisticated elevator detection
+  // This is a complex pattern recognition problem
+  
+  return events; // Placeholder for now
+}
+
+// Helper functions
+function calculateDataDuration(barometer, accelerometer) {
+  const allTimestamps = [
+    ...barometer.map(d => d.timestamp),
+    ...accelerometer.map(d => d.timestamp)
+  ].sort((a, b) => a - b);
+  
+  if (allTimestamps.length < 2) return 0;
+  return allTimestamps[allTimestamps.length - 1] - allTimestamps[0];
+}
+
+function assessSamplingConsistency(barometer, accelerometer) {
+  // Check if sampling rates are consistent
+  // Returns score 0-1 (1 = perfect consistency)
+  
+  if (barometer.length < 2) return 0;
+  
+  const intervals = [];
+  for (let i = 1; i < barometer.length; i++) {
+    intervals.push(barometer[i].timestamp - barometer[i-1].timestamp);
+  }
+  
+  const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+  const variance = intervals.reduce((sum, interval) => {
+    return sum + Math.pow(interval - avgInterval, 2);
+  }, 0) / intervals.length;
+  
+  // Lower variance = higher consistency
+  return Math.max(0, 1 - (Math.sqrt(variance) / avgInterval));
+}
+
+function calculateVerticalDistance(barometer) {
+  if (barometer.length < 2) return 0;
+  
+  const startPressure = barometer[0].pressure_hpa;
+  const endPressure = barometer[barometer.length - 1].pressure_hpa;
+  
+  // Convert pressure difference to approximate elevation change
+  // 1 hPa ≈ 8.4 meters at sea level
+  return Math.abs(startPressure - endPressure) * 8.4;
+}
+
+function calculateMovementIntensity(accelerometer) {
+  if (accelerometer.length === 0) return 0;
+  
+  const magnitudes = accelerometer.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  return magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+}
+
+function calculateAccelerometerVariance(accelerometer) {
+  if (accelerometer.length < 2) return 0;
+  
+  const magnitudes = accelerometer.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  const avg = magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+  const variance = magnitudes.reduce((sum, mag) => sum + Math.pow(mag - avg, 2), 0) / magnitudes.length;
+  
+  return variance;
+}
+
+function calculateAverageAcceleration(accelerometer) {
+  if (accelerometer.length === 0) return 0;
+  
+  const magnitudes = accelerometer.map(reading => 
+    Math.sqrt(reading.x * reading.x + reading.y * reading.y + reading.z * reading.z)
+  );
+  
+  return magnitudes.reduce((sum, mag) => sum + mag, 0) / magnitudes.length;
+}
+
+function calculateVerticalMotionTime(verticalEvents) {
+  return verticalEvents.reduce((total, event) => total + (event.duration_ms || 0), 0);
+}
+
+function calculateSessionDuration(startTime, endTime) {
+  if (!startTime || !endTime) return 0;
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  return (end - start) / (1000 * 60); // Return minutes
+}
 app.post('/api/v1/sensor-data', async (req, res) => {
   try {
     const sensorData = req.body;
@@ -482,27 +679,48 @@ app.post('/api/v1/sensor-data', async (req, res) => {
     // For now, we'll just store it and send success response
     // TODO: Add database storage and processing logic
     
-    // Basic processing example:
+    // Enhanced processing with building detection
+    const buildingInfo = await extractBuildingId(sensorData.sensor_data.gps);
+    const dataAnalysis = analyzeVerticalMovement(sensorData.sensor_data);
+    
     const processedData = {
       session_id: sensorData.session_id,
       device_id: sensorData.device_id,
       start_time: sensorData.start_time,
       end_time: sensorData.end_time,
-      data_points_collected: (sensorData.sensor_data.barometer?.length || 0) + 
-                           (sensorData.sensor_data.accelerometer?.length || 0) + 
-                           (sensorData.sensor_data.gps?.length || 0),
-      building_id: await extractBuildingId(sensorData.sensor_data.gps),
+      
+      // Building Information
+      building_info: buildingInfo,
+      
+      // Data Analysis
+      data_analysis: dataAnalysis,
+      
+      // Session Metadata
+      session_duration_minutes: calculateSessionDuration(sensorData.start_time, sensorData.end_time),
+      permissions: sensorData.permissions || {},
       processed_at: new Date().toISOString()
     };
     
-    console.log(`🏢 Processed data for building: ${processedData.building_id}`);
+    console.log(`🏢 Building: ${buildingInfo.building_name || buildingInfo.building_id} (confidence: ${(buildingInfo.confidence * 100).toFixed(1)}%)`);
+    console.log(`📊 Movement analysis: ${dataAnalysis.movement_classification}, Vertical events: ${dataAnalysis.vertical_events.length}`);
+    
+    // TODO: Store in database
+    // await storeSessionData(processedData);
     
     res.status(201).json({
       success: true,
       message: 'Sensor data received and processed',
       session_id: sensorData.session_id,
-      data_points: processedData.data_points_collected,
-      building_id: processedData.building_id
+      building: {
+        id: buildingInfo.building_id,
+        name: buildingInfo.building_name,
+        confidence: buildingInfo.confidence
+      },
+      analysis: {
+        movement_type: dataAnalysis.movement_classification,
+        vertical_events: dataAnalysis.vertical_events.length,
+        data_quality: dataAnalysis.data_quality
+      }
     });
     
   } catch (error) {
