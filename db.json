@@ -14,5 +14,17 @@
       "data_confidence": 0.90,
       "last_updated": "2025-05-20T14:05:00Z"
     }
+  ],
+  "apiKeys": [
+    {
+      "id": 1,
+      "name": "Default Key",
+      "description": "Original environment variable key",
+      "environment": "production",
+      "key": "my-test-key",
+      "status": "active",
+      "created": "2025-05-23T12:00:00Z",
+      "lastUsed": "2025-05-23T14:00:00Z"
+    }
   ]
 }
