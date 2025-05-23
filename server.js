@@ -870,7 +870,7 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
        stepAnalysis.step_frequency > 0.1 && // Ultra-slow but still rhythmic (was 0.3)
        stepAnalysis.step_frequency < 1.0 && // Below normal walking
        accelAnalysis.variance < 3.0 && // Controlled movement
-       hasVerticalMovement) // Some vertical component
+       hasVerticalMovement) ||// Some vertical component
       // Scenario 5: ACCELEROMETER-PRIMARY for ultra-slow indoor stairs (HVAC interference)
       (pressureAnalysis.change_rate_hpa_per_sec < 0.001 && // Minimal pressure due to HVAC
        stepAnalysis.step_frequency > 0.2 && // Ultra-slow but rhythmic steps
