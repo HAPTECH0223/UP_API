@@ -9,8 +9,16 @@ const DATA_FILE     = process.env.DB_FILE || 'db.json';
 const data          = require(`./${DATA_FILE}`).verticalDelay;
 
 const app = express();
+
+// Trust the first proxy (Render’s load-balancer)
+// so express-rate-limit can correctly read X-Forwarded-For
+app.set('trust proxy', 1);
+
 app.use(cors());
 app.use(express.json());
+app.use(apiKeyMiddleware);
+app.use(limiter);
+
 
 // 1) API-Key check middleware
 app.use((req, res, next) => {
