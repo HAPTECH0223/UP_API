@@ -1,0 +1,4 @@
+{
+  "/api/v1/buildings/:id/vertical-delay": "/verticalDelay?building_id=:id",
+  "/api/v1/buildings/vertical-delay/bulk": "/verticalDelay"
+}

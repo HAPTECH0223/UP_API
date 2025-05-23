@@ -1,0 +1,18 @@
+{
+  "verticalDelay": [
+    {
+      "building_id": "123_Main_St_NYC",
+      "avg_vertical_delay_sec": 320,
+      "data_points_collected": 56,
+      "data_confidence": 0.85,
+      "last_updated": "2025-05-20T14:00:00Z"
+    },
+    {
+      "building_id": "456_Park_Ave_NYC",
+      "avg_vertical_delay_sec": 280,
+      "data_points_collected": 48,
+      "data_confidence": 0.90,
+      "last_updated": "2025-05-20T14:05:00Z"
+    }
+  ]
+}
