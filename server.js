@@ -747,17 +747,18 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
        isStepPattern && 
        hasVerticalMovement) ||
       
-      // Scenario 2: Any total pressure change + strong step pattern
-      (Math.abs(pressureAnalysis.total_change_hpa) > 0.05 && 
+      // Scenario 2: Significant total pressure change + strong step pattern + higher rate
+      (Math.abs(pressureAnalysis.total_change_hpa) > 0.15 && // Much higher threshold
+       pressureAnalysis.change_rate_hpa_per_sec > 0.0015 && // Must have some rate
        stepAnalysis.step_frequency > 1.0 && 
        stepAnalysis.step_frequency < 2.5 &&
-       accelAnalysis.vertical_intensity > 0.3) ||
+       accelAnalysis.vertical_intensity > 0.5) || // Higher vertical requirement
       
       // Scenario 3: High step frequency + vertical intensity (even without pressure)
-      (stepAnalysis.step_frequency > 1.3 && 
+      (stepAnalysis.step_frequency > 1.5 && // Higher frequency requirement
        stepAnalysis.step_frequency < 2.2 &&
-       accelAnalysis.vertical_intensity > 0.6 &&
-       accelAnalysis.variance > 2.0) // More energetic than level walking
+       accelAnalysis.vertical_intensity > 0.7 && // Much higher vertical
+       accelAnalysis.variance > 5.0) // More energetic than level walking
     );
   
   // Generate reason for debugging
