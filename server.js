@@ -102,15 +102,7 @@ const apiKeyMiddleware = async (req, res, next) => {
   }
 
   const key = req.header('x-api-key') || req.query.api_key;
-  
-  // DEBUG: Log what we're checking
-  console.log('=== API KEY DEBUG ===');
-  console.log('Request key:', key);
-  
   const validKeys = await getActiveApiKeys();
-  console.log('Valid keys from DB:', validKeys);
-  console.log('Key found:', validKeys.includes(key));
-  console.log('==================');
   
   if (!validKeys.includes(key)) {
     return res.status(401).json({ error: 'Invalid or missing API key' });
