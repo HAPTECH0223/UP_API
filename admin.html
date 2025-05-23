@@ -651,46 +651,90 @@
         let apiKeys = [];
 
         // Check if already logged in (session storage)
-        function checkAuth() {
+        async function checkAuth() {
             const token = sessionStorage.getItem('admin_token');
             const expiry = sessionStorage.getItem('admin_expiry');
             
-            if (token && expiry && new Date().getTime() < parseInt(expiry)) {
-                isAuthenticated = true;
-                sessionToken = token;
-                showDashboard();
-                loadApiKeys();
-                startAutoRefresh();
-                return true;
+            if (!token || !expiry || new Date().getTime() >= parseInt(expiry)) {
+                // Clear expired session
+                sessionStorage.removeItem('admin_token');
+                sessionStorage.removeItem('admin_expiry');
+                return false;
             }
             
-            // Clear expired session
-            sessionStorage.removeItem('admin_token');
-            sessionStorage.removeItem('admin_expiry');
-            return false;
+            // Verify token with server
+            try {
+                const response = await fetch('/admin/verify', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    isAuthenticated = true;
+                    sessionToken = token;
+                    showDashboard();
+                    loadApiKeys();
+                    startAutoRefresh();
+                    return true;
+                } else {
+                    // Invalid token, clear session
+                    sessionStorage.removeItem('admin_token');
+                    sessionStorage.removeItem('admin_expiry');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error verifying session:', error);
+                return false;
+            }
         }
 
         // Login function
         async function login(username, password) {
-            // Simple authentication - in production, this should be server-side
-            // For now, using a basic hardcoded check
-            if (username === 'admin' && password === 'password') {
-                // Generate session token (in production, this comes from server)
-                const token = btoa(username + ':' + Date.now());
-                const expiry = new Date().getTime() + (24 * 60 * 60 * 1000); // 24 hours
+            try {
+                const response = await fetch('/admin/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
                 
-                sessionStorage.setItem('admin_token', token);
-                sessionStorage.setItem('admin_expiry', expiry.toString());
+                const data = await response.json();
                 
-                isAuthenticated = true;
-                sessionToken = token;
-                return true;
+                if (response.ok) {
+                    // Store session
+                    const expiry = new Date().getTime() + data.expiresIn;
+                    sessionStorage.setItem('admin_token', data.token);
+                    sessionStorage.setItem('admin_expiry', expiry.toString());
+                    
+                    isAuthenticated = true;
+                    sessionToken = data.token;
+                    return true;
+                } else {
+                    return false;
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                return false;
             }
-            return false;
         }
 
         // Logout function
-        function logout() {
+        async function logout() {
+            try {
+                if (sessionToken) {
+                    await fetch('/admin/logout', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${sessionToken}`
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
             sessionStorage.removeItem('admin_token');
             sessionStorage.removeItem('admin_expiry');
             isAuthenticated = false;
@@ -743,16 +787,24 @@
             loginBtn.textContent = '🚀 Access Dashboard';
         });
 
-        // Load API keys from server
+        // Load API keys from server with authentication
         async function loadApiKeys() {
-            if (!isAuthenticated) return;
+            if (!isAuthenticated || !sessionToken) return;
             
             try {
-                const response = await fetch('/admin/keys');
+                const response = await fetch('/admin/keys', {
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
+                });
+                
                 if (response.ok) {
                     apiKeys = await response.json();
                     renderKeys();
                     updateStats();
+                } else if (response.status === 401) {
+                    // Session expired, logout
+                    logout();
                 } else {
                     showNotification('❌ Failed to load API keys', 'error');
                 }
@@ -833,7 +885,8 @@
                 const response = await fetch('/admin/keys', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${sessionToken}`
                     },
                     body: JSON.stringify(newKeyData)
                 });
@@ -849,6 +902,8 @@
                     document.getElementById('generated-key-group').style.display = 'none';
                     
                     showNotification('✅ API key added successfully!', 'success');
+                } else if (response.status === 401) {
+                    logout();
                 } else {
                     const error = await response.json();
                     showNotification(`❌ ${error.error || 'Failed to add key'}`, 'error');
@@ -862,13 +917,18 @@
         async function toggleKeyStatus(keyId) {
             try {
                 const response = await fetch(`/admin/keys/${keyId}/status`, {
-                    method: 'PUT'
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${sessionToken}`
+                    }
                 });
 
                 if (response.ok) {
                     const updatedKey = await response.json();
                     await loadApiKeys(); // Reload from server
                     showNotification(`🔄 Key "${updatedKey.name}" ${updatedKey.status === 'active' ? 'activated' : 'deactivated'}`, 'success');
+                } else if (response.status === 401) {
+                    logout();
                 } else {
                     const error = await response.json();
                     showNotification(`❌ ${error.error || 'Failed to update key'}`, 'error');
@@ -883,13 +943,18 @@
             if (confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
                 try {
                     const response = await fetch(`/admin/keys/${keyId}`, {
-                        method: 'DELETE'
+                        method: 'DELETE',
+                        headers: {
+                            'Authorization': `Bearer ${sessionToken}`
+                        }
                     });
 
                     if (response.ok) {
                         const result = await response.json();
                         await loadApiKeys(); // Reload from server
                         showNotification(`🗑️ Key "${result.key.name}" deleted successfully`, 'success');
+                    } else if (response.status === 401) {
+                        logout();
                     } else {
                         const error = await response.json();
                         showNotification(`❌ ${error.error || 'Failed to delete key'}`, 'error');
@@ -1014,9 +1079,11 @@
         }
 
         // Initialize the app
-        if (!checkAuth()) {
-            showLogin();
-        }
+        checkAuth().then(isLoggedIn => {
+            if (!isLoggedIn) {
+                showLogin();
+            }
+        });
     </script>
 </body>
 </html>
