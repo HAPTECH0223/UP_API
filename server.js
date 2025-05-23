@@ -85,10 +85,15 @@ async function getActiveApiKeys() {
 
 async function updateKeyLastUsed(usedKey) {
   try {
-    await pool.query(
-      'UPDATE api_keys SET last_used = NOW() WHERE key = $1',
+    console.log('Updating last_used for key:', usedKey);
+    const result = await pool.query(
+      'UPDATE api_keys SET last_used = NOW() WHERE key = $1 RETURNING name, last_used',
       [usedKey]
     );
+    console.log('Update result:', result.rows);
+    if (result.rows.length === 0) {
+      console.log('No key found to update!');
+    }
   } catch (error) {
     console.error('Error updating key last used:', error);
   }
@@ -108,8 +113,8 @@ const apiKeyMiddleware = async (req, res, next) => {
     return res.status(401).json({ error: 'Invalid or missing API key' });
   }
   
-  // Update last used timestamp (don't await to avoid slowing down requests)
-  updateKeyLastUsed(key);
+  // Update last used timestamp (await it to ensure it happens)
+  await updateKeyLastUsed(key);
   next();
 };
 
