@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Key Management Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #4a5568 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 30px;
+            background: #f8fafc;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            color: #64748b;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 0.9rem;
+        }
+
+        .active { color: #10b981; }
+        .inactive { color: #ef4444; }
+        .total { color: #3b82f6; }
+
+        .controls {
+            padding: 30px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .add-key-section {
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            border: 2px solid #0ea5e9;
+        }
+
+        .add-key-section h3 {
+            color: #0c4a6e;
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+        }
+
+        .key-form {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+        }
+
+        .btn-generate {
+            background: linear-gradient(135deg, #10b981 0%, #047857 100%);
+            color: white;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .keys-section h3 {
+            margin-bottom: 20px;
+            color: #1f2937;
+            font-size: 1.4rem;
+        }
+
+        .keys-grid {
+            display: grid;
+            gap: 15px;
+        }
+
+        .key-card {
+            background: white;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .key-card:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.1);
+        }
+
+        .key-card.active {
+            border-color: #10b981;
+            background: linear-gradient(135deg, #ecfdf5 0%, #f0fdf4 100%);
+        }
+
+        .key-card.inactive {
+            border-color: #ef4444;
+            background: linear-gradient(135deg, #fef2f2 0%, #fef7f7 100%);
+            opacity: 0.8;
+        }
+
+        .key-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .key-name {
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: #1f2937;
+        }
+
+        .key-status {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .status-inactive {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .key-details {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .key-info {
+            display: grid;
+            gap: 8px;
+        }
+
+        .key-info-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+        }
+
+        .key-info-label {
+            color: #6b7280;
+            font-weight: 500;
+        }
+
+        .key-info-value {
+            color: #1f2937;
+            font-weight: 600;
+            font-family: 'Monaco', monospace;
+        }
+
+        .key-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-sm {
+            padding: 8px 16px;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #6b7280;
+        }
+
+        .empty-state h4 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+            color: #374151;
+        }
+
+        @media (max-width: 768px) {
+            .key-form {
+                flex-direction: column;
+            }
+            
+            .key-details {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+            
+            .key-actions {
+                justify-content: center;
+            }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+        .notification.show {
+            transform: translateX(0);
+        }
+
+        .notification.error {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🔐 API Key Management</h1>
+            <p>Manage and monitor your API keys with real-time status tracking</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number total" id="total-keys">0</div>
+                <div class="stat-label">Total Keys</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number active" id="active-keys">0</div>
+                <div class="stat-label">Active Keys</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number inactive" id="inactive-keys">0</div>
+                <div class="stat-label">Inactive Keys</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number total" id="last-activity">Never</div>
+                <div class="stat-label">Last Activity</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="add-key-section">
+                <h3>🚀 Add New API Key</h3>
+                <div class="key-form">
+                    <div class="form-group">
+                        <label for="key-name">Key Name</label>
+                        <input type="text" id="key-name" placeholder="e.g., Production App, Mobile Client">
+                    </div>
+                    <div class="form-group">
+                        <label for="key-description">Description</label>
+                        <input type="text" id="key-description" placeholder="Brief description of key usage">
+                    </div>
+                    <div class="form-group">
+                        <label for="key-environment">Environment</label>
+                        <select id="key-environment">
+                            <option value="production">Production</option>
+                            <option value="staging">Staging</option>
+                            <option value="development">Development</option>
+                            <option value="testing">Testing</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-generate" onclick="generateKey()">🎲 Generate Key</button>
+                    <button class="btn btn-primary" onclick="addKey()">➕ Add Key</button>
+                </div>
+            </div>
+
+            <div class="keys-section">
+                <h3>🔑 API Keys</h3>
+                <div class="keys-grid" id="keys-container">
+                    <div class="empty-state">
+                        <h4>No API Keys Found</h4>
+                        <p>Add your first API key using the form above</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification"></div>
+
+    <script>
+        // API Keys storage - loaded from server
+        let apiKeys = [];
+
+        // Load API keys from server
+        async function loadApiKeys() {
+            try {
+                const response = await fetch('/admin/keys');
+                if (response.ok) {
+                    apiKeys = await response.json();
+                    renderKeys();
+                    updateStats();
+                } else {
+                    showNotification('❌ Failed to load API keys', 'error');
+                }
+            } catch (error) {
+                console.error('Error loading API keys:', error);
+                showNotification('❌ Error connecting to server', 'error');
+            }
+        }
+
+        function generateRandomKey() {
+            const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+            const prefix = document.getElementById('key-environment').value;
+            let key = prefix + '_';
+            for (let i = 0; i < 16; i++) {
+                key += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return key;
+        }
+
+        function generateKey() {
+            const generatedKey = generateRandomKey();
+            // For demo purposes, we'll show it in the description field
+            document.getElementById('key-description').value = `Generated: ${generatedKey}`;
+            showNotification('🎲 New key generated! Copy it from the description field.', 'success');
+        }
+
+        async function addKey() {
+            const name = document.getElementById('key-name').value.trim();
+            const description = document.getElementById('key-description').value.trim();
+            const environment = document.getElementById('key-environment').value;
+
+            if (!name) {
+                showNotification('❌ Please enter a key name', 'error');
+                return;
+            }
+
+            const newKeyData = {
+                name: name,
+                description: description || 'No description provided',
+                environment: environment,
+                key: generateRandomKey()
+            };
+
+            try {
+                const response = await fetch('/admin/keys', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(newKeyData)
+                });
+
+                if (response.ok) {
+                    const newKey = await response.json();
+                    await loadApiKeys(); // Reload from server
+                    
+                    // Clear form
+                    document.getElementById('key-name').value = '';
+                    document.getElementById('key-description').value = '';
+                    
+                    showNotification('✅ API key added successfully!', 'success');
+                } else {
+                    const error = await response.json();
+                    showNotification(`❌ ${error.error || 'Failed to add key'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error adding key:', error);
+                showNotification('❌ Error connecting to server', 'error');
+            }
+        }
+
+        async function toggleKeyStatus(keyId) {
+            try {
+                const response = await fetch(`/admin/keys/${keyId}/status`, {
+                    method: 'PUT'
+                });
+
+                if (response.ok) {
+                    const updatedKey = await response.json();
+                    await loadApiKeys(); // Reload from server
+                    showNotification(`🔄 Key "${updatedKey.name}" ${updatedKey.status === 'active' ? 'activated' : 'deactivated'}`, 'success');
+                } else {
+                    const error = await response.json();
+                    showNotification(`❌ ${error.error || 'Failed to update key'}`, 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling key status:', error);
+                showNotification('❌ Error connecting to server', 'error');
+            }
+        }
+
+        async function deleteKey(keyId) {
+            if (confirm('Are you sure you want to delete this API key? This action cannot be undone.')) {
+                try {
+                    const response = await fetch(`/admin/keys/${keyId}`, {
+                        method: 'DELETE'
+                    });
+
+                    if (response.ok) {
+                        const result = await response.json();
+                        await loadApiKeys(); // Reload from server
+                        showNotification(`🗑️ Key "${result.key.name}" deleted successfully`, 'success');
+                    } else {
+                        const error = await response.json();
+                        showNotification(`❌ ${error.error || 'Failed to delete key'}`, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting key:', error);
+                    showNotification('❌ Error connecting to server', 'error');
+                }
+            }
+        }
+
+        function formatDate(date) {
+            if (!date) return 'Never';
+            return new Intl.DateTimeFormat('en-US', {
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).format(new Date(date));
+        }
+
+        function getRelativeTime(date) {
+            if (!date) return 'Never';
+            const now = new Date();
+            const diff = now - new Date(date);
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const days = Math.floor(hours / 24);
+            
+            if (days > 0) return `${days}d ago`;
+            if (hours > 0) return `${hours}h ago`;
+            return 'Just now';
+        }
+
+        function renderKeys() {
+            const container = document.getElementById('keys-container');
+            
+            if (apiKeys.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h4>No API Keys Found</h4>
+                        <p>Add your first API key using the form above</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = apiKeys.map(key => `
+                <div class="key-card ${key.status}">
+                    <div class="key-header">
+                        <div class="key-name">${key.name}</div>
+                        <div class="key-status status-${key.status}">${key.status}</div>
+                    </div>
+                    <div class="key-details">
+                        <div class="key-info">
+                            <div class="key-info-item">
+                                <span class="key-info-label">Key:</span>
+                                <span class="key-info-value">${key.key}</span>
+                            </div>
+                            <div class="key-info-item">
+                                <span class="key-info-label">Environment:</span>
+                                <span class="key-info-value">${key.environment}</span>
+                            </div>
+                            <div class="key-info-item">
+                                <span class="key-info-label">Created:</span>
+                                <span class="key-info-value">${formatDate(key.created)}</span>
+                            </div>
+                            <div class="key-info-item">
+                                <span class="key-info-label">Last Used:</span>
+                                <span class="key-info-value">${getRelativeTime(key.lastUsed)}</span>
+                            </div>
+                            <div class="key-info-item">
+                                <span class="key-info-label">Description:</span>
+                                <span class="key-info-value">${key.description}</span>
+                            </div>
+                        </div>
+                        <div class="key-actions">
+                            <button class="btn btn-sm ${key.status === 'active' ? 'btn-danger' : 'btn-success'}" 
+                                    onclick="toggleKeyStatus(${key.id})">
+                                ${key.status === 'active' ? '⏸️ Deactivate' : '▶️ Activate'}
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteKey(${key.id})">
+                                🗑️ Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            const total = apiKeys.length;
+            const active = apiKeys.filter(k => k.status === 'active').length;
+            const inactive = total - active;
+            
+            // Find most recent activity
+            const lastActivity = apiKeys
+                .filter(k => k.lastUsed)
+                .map(k => new Date(k.lastUsed))
+                .sort((a, b) => b - a)[0];
+
+            document.getElementById('total-keys').textContent = total;
+            document.getElementById('active-keys').textContent = active;
+            document.getElementById('inactive-keys').textContent = inactive;
+            document.getElementById('last-activity').textContent = getRelativeTime(lastActivity);
+        }
+
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        // Initialize the dashboard
+        loadApiKeys();
+    </script>
+</body>
+</html>
