@@ -460,6 +460,7 @@
                 const response = await fetch('/admin/keys');
                 if (response.ok) {
                     apiKeys = await response.json();
+                    console.log('Loaded API keys from server:', apiKeys);
                     renderKeys();
                     updateStats();
                 } else {
