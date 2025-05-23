@@ -525,57 +525,50 @@ function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
     accelAnalysis.vertical_intensity > 0.4;
   
   // INDOOR STAIRS - Relaxed thresholds (HVAC interference, short distances)
-  const is_stairs_indoor = 
-    !is_stairs_outdoor && // Not already caught by outdoor
-    (
-      // Scenario 1: Minimal pressure + clear step pattern + vertical movement
-      (pressureAnalysis.change_rate_hpa_per_sec >= 0.0008 && 
-       isStepPattern && 
-       hasVerticalMovement) ||
-      
-      // Scenario 2: Significant total pressure change + strong step pattern + higher rate
-      (Math.abs(pressureAnalysis.total_change_hpa) > 0.15 && // Much higher threshold
-       pressureAnalysis.change_rate_hpa_per_sec > 0.0015 && // Must have some rate
-       stepAnalysis.step_frequency > 1.0 && 
-       stepAnalysis.step_frequency < 2.5 &&
-       accelAnalysis.vertical_intensity > 0.5) || // Higher vertical requirement
-      
-      // Scenario 3: High step frequency + vertical intensity (even without pressure)
-      (stepAnalysis.step_frequency > 1.5 && // Higher frequency requirement
-       stepAnalysis.step_frequency < 2.2 &&
-       accelAnalysis.vertical_intensity > 0.7 && // Much higher vertical
-       accelAnalysis.variance > 5.0) || // More energetic than level walking
-      
-      // Scenario 4: SLOW STAIRS - Research-backed threshold (0.001 hPa/s minimum)
-      (pressureAnalysis.change_rate_hpa_per_sec > 0.001 && // Much lower threshold per research
-       stepAnalysis.step_frequency > 0.1 && // Ultra-slow but still rhythmic (was 0.3)
-       stepAnalysis.step_frequency < 1.0 && // Below normal walking
-       accelAnalysis.variance < 3.0 && // Controlled movement
-       hasVerticalMovement) || // Some vertical component
-      
-      // Scenario 5: ACCELEROMETER-PRIMARY for ultra-slow indoor stairs (HVAC interference)
-      (pressureAnalysis.change_rate_hpa_per_sec < 0.001 && // Minimal pressure due to HVAC
-       stepAnalysis.step_frequency > 0.2 && // Ultra-slow but rhythmic steps
-       stepAnalysis.step_frequency < 0.8 && // Below normal walking
-       accelAnalysis.vertical_intensity > 0.2 && // Some vertical component
-       accelAnalysis.variance > 0.5 && // More than stationary
-       accelAnalysis.duration_seconds > 60) // Sustained activity
-    );
+  const scenario1 = pressureAnalysis.change_rate_hpa_per_sec >= 0.0008 && 
+                   isStepPattern && 
+                   hasVerticalMovement;
+  
+  const scenario2 = Math.abs(pressureAnalysis.total_change_hpa) > 0.15 && 
+                   pressureAnalysis.change_rate_hpa_per_sec > 0.0015 && 
+                   stepAnalysis.step_frequency > 1.0 && 
+                   stepAnalysis.step_frequency < 2.5 &&
+                   accelAnalysis.vertical_intensity > 0.5;
+  
+  const scenario3 = stepAnalysis.step_frequency > 1.5 && 
+                   stepAnalysis.step_frequency < 2.2 &&
+                   accelAnalysis.vertical_intensity > 0.7 && 
+                   accelAnalysis.variance > 5.0;
+  
+  const scenario4 = pressureAnalysis.change_rate_hpa_per_sec > 0.001 && 
+                   stepAnalysis.step_frequency > 0.1 && 
+                   stepAnalysis.step_frequency < 1.0 && 
+                   accelAnalysis.variance < 3.0 && 
+                   hasVerticalMovement;
+  
+  const scenario5 = pressureAnalysis.change_rate_hpa_per_sec < 0.001 && 
+                   stepAnalysis.step_frequency > 0.05 && // Glacial pace (was 0.2)
+                   stepAnalysis.step_frequency < 0.8 && 
+                   accelAnalysis.vertical_intensity > 0.2 && 
+                   accelAnalysis.variance > 0.5 && 
+                   accelAnalysis.duration_seconds > 60;
+  
+  const is_stairs_indoor = !is_stairs_outdoor && (scenario1 || scenario2 || scenario3 || scenario4 || scenario5);
   
   // Generate reason for debugging
   let reason = '';
   if (is_stairs_outdoor) {
     reason = `Rate: ${pressureAnalysis.change_rate_hpa_per_sec.toFixed(4)} hPa/s, Steps: ${stepAnalysis.step_frequency.toFixed(2)} Hz, Vertical: ${accelAnalysis.vertical_intensity.toFixed(3)}`;
   } else if (is_stairs_indoor) {
-    if (pressureAnalysis.change_rate_hpa_per_sec >= 0.0008 && isStepPattern && hasVerticalMovement) {
+    if (scenario1) {
       reason = `Indoor minimal pressure + steps (${stepAnalysis.step_frequency.toFixed(2)} Hz) + vertical`;
-    } else if (Math.abs(pressureAnalysis.total_change_hpa) > 0.15) {
+    } else if (scenario2) {
       reason = `Indoor total pressure change (${pressureAnalysis.total_change_hpa.toFixed(3)} hPa) + strong steps`;
-    } else if (stepAnalysis.step_frequency > 1.5) {
+    } else if (scenario3) {
       reason = `Indoor high step frequency (${stepAnalysis.step_frequency.toFixed(2)} Hz) + vertical intensity`;
-    } else if (pressureAnalysis.change_rate_hpa_per_sec > 0.001) {
+    } else if (scenario4) {
       reason = `Slow deliberate stairs (${stepAnalysis.step_frequency.toFixed(2)} Hz) + research-backed threshold`;
-    } else if (pressureAnalysis.change_rate_hpa_per_sec < 0.001 && stepAnalysis.step_frequency > 0.2) {
+    } else if (scenario5) {
       reason = `Accelerometer-primary ultra-slow stairs (${stepAnalysis.step_frequency.toFixed(2)} Hz) - HVAC interference`;
     }
   }
