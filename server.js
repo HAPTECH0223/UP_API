@@ -44,6 +44,16 @@ function getActiveApiKeys() {
     .map(key => key.key);
 }
 
+// Add this debug function after getActiveApiKeys()
+function debugApiKeys(requestKey) {
+  const db = readDatabase();
+  console.log('=== DEBUG API KEYS ===');
+  console.log('Request key:', requestKey);
+  console.log('All keys in DB:', db.apiKeys?.map(k => ({ key: k.key, status: k.status })));
+  console.log('Active keys:', getActiveApiKeys());
+  console.log('=====================');
+}
+
 function updateKeyLastUsed(usedKey) {
   const db = readDatabase();
   const keyIndex = db.apiKeys.findIndex(key => key.key === usedKey);
@@ -55,19 +65,19 @@ function updateKeyLastUsed(usedKey) {
 
 // ——— API Key middleware ———
 const apiKeyMiddleware = (req, res, next) => {
-  // Skip auth for admin endpoints
   if (req.path.startsWith('/admin')) {
     return next();
   }
 
   const key = req.header('x-api-key') || req.query.api_key;
+  debugApiKeys(key); // Add this line
+  
   const validKeys = getActiveApiKeys();
   
   if (!validKeys.includes(key)) {
     return res.status(401).json({ error: 'Invalid or missing API key' });
   }
   
-  // Update last used timestamp
   updateKeyLastUsed(key);
   next();
 };
