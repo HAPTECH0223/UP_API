@@ -5,9 +5,12 @@ const rateLimit = require('express-rate-limit');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');
+const crypto = require('crypto');
 
 const API_KEY = process.env.API_KEY || 'my-test-key';
 const DATA_FILE = process.env.DB_FILE || 'db.json';
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'secure-admin-password-123';
 
 const app = express();
 
@@ -16,6 +19,9 @@ app.set('trust proxy', 1);
 
 app.use(cors());
 app.use(express.json());
+
+// In-memory session store (in production, use Redis or database)
+const sessions = new Map();
 
 // PostgreSQL connection
 const pool = new Pool({
@@ -85,23 +91,84 @@ async function getActiveApiKeys() {
 
 async function updateKeyLastUsed(usedKey) {
   try {
-    console.log('Updating last_used for key:', usedKey);
-    const result = await pool.query(
-      'UPDATE api_keys SET last_used = NOW() WHERE key = $1 RETURNING name, last_used',
+    await pool.query(
+      'UPDATE api_keys SET last_used = NOW() WHERE key = $1',
       [usedKey]
     );
-    console.log('Update result:', result.rows);
-    if (result.rows.length === 0) {
-      console.log('No key found to update!');
-    }
   } catch (error) {
     console.error('Error updating key last used:', error);
   }
 }
 
+// ——— Authentication Functions ———
+function generateSessionToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function createSession(username) {
+  const sessionToken = generateSessionToken();
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+  
+  sessions.set(sessionToken, {
+    username,
+    expiresAt,
+    createdAt: new Date()
+  });
+  
+  return sessionToken;
+}
+
+function validateSession(sessionToken) {
+  const session = sessions.get(sessionToken);
+  if (!session) return false;
+  
+  if (new Date() > session.expiresAt) {
+    sessions.delete(sessionToken);
+    return false;
+  }
+  
+  return session;
+}
+
+function cleanupExpiredSessions() {
+  const now = new Date();
+  for (const [token, session] of sessions.entries()) {
+    if (now > session.expiresAt) {
+      sessions.delete(token);
+    }
+  }
+}
+
+// Cleanup expired sessions every hour
+setInterval(cleanupExpiredSessions, 60 * 60 * 1000);
+
+// ——— Authentication Middleware ———
+const adminAuthMiddleware = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  
+  const token = authHeader.split(' ')[1];
+  const session = validateSession(token);
+  
+  if (!session) {
+    return res.status(401).json({ error: 'Invalid or expired session' });
+  }
+  
+  req.user = session;
+  next();
+};
+
 // ——— API Key middleware ———
 const apiKeyMiddleware = async (req, res, next) => {
-  // Skip auth for admin endpoints
+  // Skip auth for admin login endpoint
+  if (req.path === '/admin/login' || req.path === '/admin' || req.path.startsWith('/admin/') && req.method === 'GET') {
+    return next();
+  }
+
+  // Skip API key check for admin endpoints (they use session auth)
   if (req.path.startsWith('/admin')) {
     return next();
   }
@@ -113,7 +180,7 @@ const apiKeyMiddleware = async (req, res, next) => {
     return res.status(401).json({ error: 'Invalid or missing API key' });
   }
   
-  // Update last used timestamp (await it to ensure it happens)
+  // Update last used timestamp
   await updateKeyLastUsed(key);
   next();
 };
@@ -137,15 +204,61 @@ const limiter = rateLimit({
 app.use(limiter);
 app.use(apiKeyMiddleware);
 
-// ——— Admin Dashboard Routes ———
+// ——— Admin Authentication Routes ———
 
-// Serve admin dashboard
+// Serve admin dashboard (login page)
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
-// Get all API keys
-app.get('/admin/keys', async (req, res) => {
+// Admin login endpoint
+app.post('/admin/login', (req, res) => {
+  const { username, password } = req.body;
+  
+  if (!username || !password) {
+    return res.status(400).json({ error: 'Username and password required' });
+  }
+  
+  // Validate credentials
+  if (username === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+    const sessionToken = createSession(username);
+    
+    res.json({
+      success: true,
+      token: sessionToken,
+      expiresIn: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
+      message: 'Login successful'
+    });
+  } else {
+    // Add delay to prevent brute force attacks
+    setTimeout(() => {
+      res.status(401).json({ error: 'Invalid credentials' });
+    }, 1000);
+  }
+});
+
+// Admin logout endpoint
+app.post('/admin/logout', adminAuthMiddleware, (req, res) => {
+  const authHeader = req.headers.authorization;
+  const token = authHeader.split(' ')[1];
+  
+  sessions.delete(token);
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+// Check session validity
+app.get('/admin/verify', adminAuthMiddleware, (req, res) => {
+  res.json({ 
+    valid: true, 
+    user: req.user.username,
+    expiresAt: req.user.expiresAt 
+  });
+});
+
+// ——— Protected Admin Dashboard Routes ———
+
+// Get all API keys (protected)
+app.get('/admin/keys', adminAuthMiddleware, async (req, res) => {
   try {
     const result = await pool.query(`
       SELECT id, name, description, environment, key, status, created, last_used
@@ -159,8 +272,8 @@ app.get('/admin/keys', async (req, res) => {
   }
 });
 
-// Add new API key
-app.post('/admin/keys', async (req, res) => {
+// Add new API key (protected)
+app.post('/admin/keys', adminAuthMiddleware, async (req, res) => {
   const { name, description, environment, key } = req.body;
   
   if (!name || !key) {
@@ -191,8 +304,8 @@ app.post('/admin/keys', async (req, res) => {
   }
 });
 
-// Toggle key status
-app.put('/admin/keys/:id/status', async (req, res) => {
+// Toggle key status (protected)
+app.put('/admin/keys/:id/status', adminAuthMiddleware, async (req, res) => {
   const keyId = parseInt(req.params.id);
   
   try {
@@ -214,8 +327,8 @@ app.put('/admin/keys/:id/status', async (req, res) => {
   }
 });
 
-// Delete API key
-app.delete('/admin/keys/:id', async (req, res) => {
+// Delete API key (protected)
+app.delete('/admin/keys/:id', adminAuthMiddleware, async (req, res) => {
   const keyId = parseInt(req.params.id);
   
   try {
@@ -255,7 +368,7 @@ const PORT = process.env.PORT || 3000;
 async function startServer() {
   await initializeDatabase();
   app.listen(PORT, '0.0.0.0', () =>
-    console.log(`API server with PostgreSQL admin dashboard listening on http://0.0.0.0:${PORT}`)
+    console.log(`Secure API server with admin dashboard listening on http://0.0.0.0:${PORT}`)
   );
 }
 
