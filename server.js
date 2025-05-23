@@ -514,73 +514,95 @@ const BUILDING_DATABASE = [
 
 // ——— ENHANCED STAIRS ANALYSIS (Indoor vs Outdoor) ———
 function analyzeStairsPattern(pressureAnalysis, stepAnalysis, accelAnalysis) {
-  const isStepPattern = stepAnalysis.step_frequency > 0.8 && stepAnalysis.step_frequency < 2.8;
-  const hasVerticalMovement = accelAnalysis.vertical_intensity > 0.2;
-  
-  // OUTDOOR STAIRS - Research-based thresholds (clear pressure changes)
-  const is_stairs_outdoor = 
-    pressureAnalysis.change_rate_hpa_per_sec >= 0.015 && // Strong pressure signal
-    pressureAnalysis.change_rate_hpa_per_sec <= 0.08 &&
-    isStepPattern &&
-    accelAnalysis.vertical_intensity > 0.4;
-  
-  // INDOOR STAIRS - Relaxed thresholds (HVAC interference, short distances)
-  const scenario1 = pressureAnalysis.change_rate_hpa_per_sec >= 0.0008 && 
-                   isStepPattern && 
-                   hasVerticalMovement;
-  
-  const scenario2 = Math.abs(pressureAnalysis.total_change_hpa) > 0.15 && 
-                   pressureAnalysis.change_rate_hpa_per_sec > 0.0015 && 
-                   stepAnalysis.step_frequency > 1.0 && 
-                   stepAnalysis.step_frequency < 2.5 &&
-                   accelAnalysis.vertical_intensity > 0.5;
-  
-  const scenario3 = stepAnalysis.step_frequency > 1.5 && 
-                   stepAnalysis.step_frequency < 2.2 &&
-                   accelAnalysis.vertical_intensity > 0.7 && 
-                   accelAnalysis.variance > 5.0;
-  
-  const scenario4 = pressureAnalysis.change_rate_hpa_per_sec > 0.001 && 
-                   stepAnalysis.step_frequency > 0.1 && 
-                   stepAnalysis.step_frequency < 1.0 && 
-                   accelAnalysis.variance < 3.0 && 
-                   hasVerticalMovement;
-  
-  const scenario5 = pressureAnalysis.change_rate_hpa_per_sec < 0.001 && 
-                   stepAnalysis.step_frequency > 0.05 && // Glacial pace (was 0.2)
-                   stepAnalysis.step_frequency < 0.8 && 
-                   accelAnalysis.vertical_intensity > 0.2 && 
-                   accelAnalysis.variance > 0.5 && 
-                   accelAnalysis.duration_seconds > 60;
-  
-  const is_stairs_indoor = !is_stairs_outdoor && (scenario1 || scenario2 || scenario3 || scenario4 || scenario5);
-  
-  // Generate reason for debugging
-  let reason = '';
-  if (is_stairs_outdoor) {
-    reason = `Rate: ${pressureAnalysis.change_rate_hpa_per_sec.toFixed(4)} hPa/s, Steps: ${stepAnalysis.step_frequency.toFixed(2)} Hz, Vertical: ${accelAnalysis.vertical_intensity.toFixed(3)}`;
-  } else if (is_stairs_indoor) {
-    if (scenario1) {
-      reason = `Indoor minimal pressure + steps (${stepAnalysis.step_frequency.toFixed(2)} Hz) + vertical`;
-    } else if (scenario2) {
-      reason = `Indoor total pressure change (${pressureAnalysis.total_change_hpa.toFixed(3)} hPa) + strong steps`;
-    } else if (scenario3) {
-      reason = `Indoor high step frequency (${stepAnalysis.step_frequency.toFixed(2)} Hz) + vertical intensity`;
-    } else if (scenario4) {
-      reason = `Slow deliberate stairs (${stepAnalysis.step_frequency.toFixed(2)} Hz) + research-backed threshold`;
-    } else if (scenario5) {
-      reason = `Accelerometer-primary ultra-slow stairs (${stepAnalysis.step_frequency.toFixed(2)} Hz) - HVAC interference`;
+  try {
+    const isStepPattern = stepAnalysis.step_frequency > 0.8 && stepAnalysis.step_frequency < 2.8;
+    const hasVerticalMovement = accelAnalysis.vertical_intensity > 0.2;
+    
+    // OUTDOOR STAIRS - Research-based thresholds (clear pressure changes)
+    const is_stairs_outdoor = 
+      pressureAnalysis.change_rate_hpa_per_sec >= 0.015 && 
+      pressureAnalysis.change_rate_hpa_per_sec <= 0.08 &&
+      isStepPattern &&
+      accelAnalysis.vertical_intensity > 0.4;
+    
+    // INDOOR STAIRS - Check each scenario separately for debugging
+    const scenario1 = (
+      pressureAnalysis.change_rate_hpa_per_sec >= 0.0008 && 
+      isStepPattern && 
+      hasVerticalMovement
+    );
+    
+    const scenario2 = (
+      Math.abs(pressureAnalysis.total_change_hpa) > 0.15 && 
+      pressureAnalysis.change_rate_hpa_per_sec > 0.0015 && 
+      stepAnalysis.step_frequency > 1.0 && 
+      stepAnalysis.step_frequency < 2.5 &&
+      accelAnalysis.vertical_intensity > 0.5
+    );
+    
+    const scenario3 = (
+      stepAnalysis.step_frequency > 1.5 && 
+      stepAnalysis.step_frequency < 2.2 &&
+      accelAnalysis.vertical_intensity > 0.7 && 
+      accelAnalysis.variance > 5.0
+    );
+    
+    const scenario4 = (
+      pressureAnalysis.change_rate_hpa_per_sec > 0.001 && 
+      stepAnalysis.step_frequency > 0.1 && 
+      stepAnalysis.step_frequency < 1.0 && 
+      accelAnalysis.variance < 3.0 && 
+      hasVerticalMovement
+    );
+    
+    const scenario5 = (
+      pressureAnalysis.change_rate_hpa_per_sec < 0.001 && 
+      stepAnalysis.step_frequency > 0.05 && 
+      stepAnalysis.step_frequency < 0.8 && 
+      accelAnalysis.vertical_intensity > 0.2 && 
+      accelAnalysis.variance > 0.5 && 
+      accelAnalysis.duration_seconds > 60
+    );
+    
+    const is_stairs_indoor = !is_stairs_outdoor && (scenario1 || scenario2 || scenario3 || scenario4 || scenario5);
+    
+    // Generate reason for debugging
+    let reason = '';
+    if (is_stairs_outdoor) {
+      reason = `Outdoor: Rate ${pressureAnalysis.change_rate_hpa_per_sec.toFixed(4)} hPa/s, Steps ${stepAnalysis.step_frequency.toFixed(2)} Hz`;
+    } else if (is_stairs_indoor) {
+      if (scenario1) {
+        reason = `Scenario 1: Indoor minimal pressure + steps (${stepAnalysis.step_frequency.toFixed(2)} Hz)`;
+      } else if (scenario2) {
+        reason = `Scenario 2: Total pressure change (${pressureAnalysis.total_change_hpa.toFixed(3)} hPa)`;
+      } else if (scenario3) {
+        reason = `Scenario 3: High step frequency (${stepAnalysis.step_frequency.toFixed(2)} Hz)`;
+      } else if (scenario4) {
+        reason = `Scenario 4: Slow stairs (${stepAnalysis.step_frequency.toFixed(2)} Hz)`;
+      } else if (scenario5) {
+        reason = `Scenario 5: Ultra-slow accelerometer-primary (${stepAnalysis.step_frequency.toFixed(2)} Hz)`;
+      }
     }
+    
+    return {
+      is_stairs_outdoor: is_stairs_outdoor,
+      is_stairs_indoor: is_stairs_indoor,
+      is_stairs_any: is_stairs_outdoor || is_stairs_indoor,
+      reason: reason,
+      step_pattern_detected: isStepPattern,
+      vertical_movement_detected: hasVerticalMovement
+    };
+  } catch (error) {
+    console.error('Error in analyzeStairsPattern:', error);
+    return {
+      is_stairs_outdoor: false,
+      is_stairs_indoor: false,
+      is_stairs_any: false,
+      reason: 'Error in analysis',
+      step_pattern_detected: false,
+      vertical_movement_detected: false
+    };
   }
-  
-  return {
-    is_stairs_outdoor,
-    is_stairs_indoor,
-    is_stairs_any: is_stairs_outdoor || is_stairs_indoor,
-    reason,
-    step_pattern_detected: isStepPattern,
-    vertical_movement_detected: hasVerticalMovement
-  };
 }
 
 // ——— RESEARCH-BASED MOVEMENT CLASSIFICATION ALGORITHM ———
