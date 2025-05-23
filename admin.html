@@ -652,15 +652,24 @@
 
         // Check if already logged in (session storage)
         async function checkAuth() {
+            console.log('=== AUTH CHECK DEBUG ===');
             const token = sessionStorage.getItem('admin_token');
             const expiry = sessionStorage.getItem('admin_expiry');
             
+            console.log('Stored token:', token ? token.substring(0, 10) + '...' : 'none');
+            console.log('Stored expiry:', expiry);
+            console.log('Current time:', new Date().getTime());
+            console.log('Token expired?', expiry ? new Date().getTime() >= parseInt(expiry) : 'no expiry');
+            
             if (!token || !expiry || new Date().getTime() >= parseInt(expiry)) {
+                console.log('❌ No valid local session found');
                 // Clear expired session
                 sessionStorage.removeItem('admin_token');
                 sessionStorage.removeItem('admin_expiry');
                 return false;
             }
+            
+            console.log('✅ Local session valid, verifying with server...');
             
             // Verify token with server
             try {
@@ -670,7 +679,11 @@
                     }
                 });
                 
+                console.log('Server verification response:', response.status);
+                
                 if (response.ok) {
+                    const data = await response.json();
+                    console.log('✅ Server verification successful:', data);
                     isAuthenticated = true;
                     sessionToken = token;
                     showDashboard();
@@ -678,13 +691,14 @@
                     startAutoRefresh();
                     return true;
                 } else {
+                    console.log('❌ Server verification failed');
                     // Invalid token, clear session
                     sessionStorage.removeItem('admin_token');
                     sessionStorage.removeItem('admin_expiry');
                     return false;
                 }
             } catch (error) {
-                console.error('Error verifying session:', error);
+                console.error('❌ Error verifying session:', error);
                 return false;
             }
         }
