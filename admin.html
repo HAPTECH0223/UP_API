@@ -534,8 +534,26 @@
             transform: translateX(0);
         }
 
-        .notification.error {
-            background: #ef4444;
+        .expires-later { color: #10b981; }
+        .expires-soon { color: #f59e0b; }
+        .expires-very-soon { color: #ef4444; }
+        .expires-critical { color: #dc2626; font-weight: bold; }
+        .expired { color: #991b1b; font-weight: bold; }
+        .no-expiry { color: #6b7280; }
+
+        .auto-disabled-badge {
+            font-size: 0.75rem;
+            background: #fef3c7;
+            color: #92400e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 8px;
+        }
+
+        .key-card.auto-disabled {
+            border-color: #f59e0b;
+            background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+            opacity: 0.9;
         }
     </style>
 </head>
@@ -613,6 +631,15 @@
                             <input type="text" id="generated-key" readonly style="background: #f8fafc; font-family: Monaco, monospace; font-weight: bold;">
                             <button type="button" class="btn btn-generate" onclick="copyGeneratedKey()" style="white-space: nowrap;">📋 Copy</button>
                         </div>
+                    </div>
+                    <div class="form-group-dashboard">
+                        <label for="key-expiration">Expiration Period</label>
+                        <select id="key-expiration" required>
+                            <option value="">Select expiration time</option>
+                            <option value="day">1 Day</option>
+                            <option value="week">1 Week</option>
+                            <option value="month">1 Month</option>
+                        </select>
                     </div>
                     <div class="form-group-dashboard">
                         <label for="key-environment">Environment</label>
@@ -876,6 +903,7 @@
             const name = document.getElementById('key-name').value.trim();
             const description = document.getElementById('key-description').value.trim();
             const environment = document.getElementById('key-environment').value;
+            const expirationPeriod = document.getElementById('key-expiration').value;
             const generatedKey = document.getElementById('generated-key').value;
 
             if (!name) {
@@ -888,11 +916,17 @@
                 return;
             }
 
+            if (!expirationPeriod) {
+                showNotification('❌ Please select an expiration period', 'error');
+                return;
+            }
+
             const newKeyData = {
                 name: name,
                 description: description || 'No description provided',
                 environment: environment,
-                key: generatedKey
+                key: generatedKey,
+                expirationPeriod: expirationPeriod
             };
 
             try {
@@ -912,6 +946,7 @@
                     // Clear form
                     document.getElementById('key-name').value = '';
                     document.getElementById('key-description').value = '';
+                    document.getElementById('key-expiration').value = '';
                     document.getElementById('generated-key').value = '';
                     document.getElementById('generated-key-group').style.display = 'none';
                     
@@ -990,6 +1025,25 @@
             }).format(new Date(date));
         }
 
+        function getExpirationStatus(expiresAt) {
+            if (!expiresAt) return { text: 'Never', class: 'no-expiry' };
+            
+            const now = new Date();
+            const expiry = new Date(expiresAt);
+            const diff = expiry - now;
+            
+            if (diff <= 0) return { text: 'Expired', class: 'expired' };
+            
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            
+            if (days > 7) return { text: `${days} days`, class: 'expires-later' };
+            if (days > 1) return { text: `${days} days`, class: 'expires-soon' };
+            if (days === 1) return { text: '1 day', class: 'expires-very-soon' };
+            if (hours > 1) return { text: `${hours} hours`, class: 'expires-very-soon' };
+            return { text: 'Soon', class: 'expires-critical' };
+        }
+
         function getRelativeTime(date) {
             if (!date) return 'Never';
             
@@ -1021,10 +1075,18 @@
                 return;
             }
 
-            container.innerHTML = apiKeys.map(key => `
-                <div class="key-card ${key.status}">
+            container.innerHTML = apiKeys.map(key => {
+                const expirationStatus = getExpirationStatus(key.expires_at);
+                const isAutoDisabled = key.auto_disabled;
+                const keyClass = isAutoDisabled ? 'auto-disabled' : key.status;
+                
+                return `
+                <div class="key-card ${keyClass}">
                     <div class="key-header">
-                        <div class="key-name">${key.name}</div>
+                        <div class="key-name">
+                            ${key.name}
+                            ${isAutoDisabled ? '<span class="auto-disabled-badge">🕒 Auto-disabled</span>' : ''}
+                        </div>
                         <div class="key-status status-${key.status}">${key.status}</div>
                     </div>
                     <div class="key-details">
@@ -1046,13 +1108,18 @@
                                 <span class="key-info-value">${getRelativeTime(key.last_used)}</span>
                             </div>
                             <div class="key-info-item">
+                                <span class="key-info-label">Expires:</span>
+                                <span class="key-info-value expires-${expirationStatus.class}">${expirationStatus.text}</span>
+                            </div>
+                            <div class="key-info-item">
                                 <span class="key-info-label">Description:</span>
                                 <span class="key-info-value">${key.description}</span>
                             </div>
                         </div>
                         <div class="key-actions">
                             <button class="btn btn-sm ${key.status === 'active' ? 'btn-danger' : 'btn-success'}" 
-                                    onclick="toggleKeyStatus(${key.id})">
+                                    onclick="toggleKeyStatus(${key.id})"
+                                    ${isAutoDisabled ? 'title="Key was auto-disabled due to expiration"' : ''}>
                                 ${key.status === 'active' ? '⏸️ Deactivate' : '▶️ Activate'}
                             </button>
                             <button class="btn btn-sm btn-danger" onclick="deleteKey(${key.id})">
@@ -1061,7 +1128,8 @@
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         function updateStats() {
